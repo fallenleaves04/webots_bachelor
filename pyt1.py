@@ -474,7 +474,7 @@ class NewPlanner(QtCore.QObject):
         y_new = y + d * self.step_size * np.sin(theta)
         return (x_new, y_new, theta_new)
     
-    def get_neighbours(self, node:Node, grid:NewOccupancyGrid) -> list[Node]:
+    def get_neighbours(self, node:Node, grid:NewOccupancyGrid):
         
         neighbours = []
         
@@ -510,8 +510,8 @@ class NewPlanner(QtCore.QObject):
         cost = dist
         if node.direction != direction:
             cost += C.GEAR_CHANGE_COST
-        #if direction == "backward":
-            #cost += C.BACKWARD_COST
+        if direction == "forward":
+            cost *= C.BACKWARD_COST
 
         cost += C.STEER_ANGLE_COST * abs(delta)
         
@@ -536,7 +536,8 @@ class NewPlanner(QtCore.QObject):
         if not rs_path:
             return None,None
         for i in range(0,len(rs_path),1): 
-            if grid.is_collision(*rs_path[i]):
+            (rs_xs,rs_ys,rs_yaws,rs_deltas,rs_segment_lengths) = rs_path[i]
+            if grid.is_collision(rs_xs,rs_ys,rs_yaws):
                 return None,None
             if hasattr(self, 'current_potential_map'):
                 mx = int(round(rs_path[i][0] / self.xy_resolution)) - self.map_offset_x
@@ -815,7 +816,7 @@ class Planner(QtCore.QObject):
         y_new = y + d * self.xy_resolution * np.sin(theta)
         return (x_new, y_new, theta_new)
     
-    def get_neighbours(self, node:Node, grid:NewOccupancyGrid) -> list[Node]:
+    def get_neighbours(self, node:Node, grid:NewOccupancyGrid):
         
         neighbours = []
         
@@ -872,8 +873,9 @@ class Planner(QtCore.QObject):
         rs_path = reeds_shepp.path_sample(node.state,goal_pose,C.MAX_RADIUS,self.step_size)
         if not rs_path:
             return None,None
-        for i in range(0, len(rs_path), 5): # co 5 próbka
-            if grid.is_collision(*rs_path[i]):
+        for i in range(0, len(rs_path)): 
+            (rs_xs,rs_ys,rs_yaws,rs_deltas,rs_segment_lengths) = rs_path[i]
+            if grid.is_collision(rs_xs,rs_ys,rs_yaws):
                 return None,None
             
         path_length = reeds_shepp.path_length(

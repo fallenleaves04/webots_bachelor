@@ -371,7 +371,7 @@ class TrajView(pg.GraphicsLayoutWidget):
         colormap = pg.colormap.get('viridis') 
         self.hmap_item.setLookupTable(colormap.getLookupTable())
 
-        self.hmap_item.setOpacity(0.5)
+        self.hmap_item.setOpacity(0.6)
         tr = QtGui.QTransform()
         
         origin_x = minx * C.XY_RESOLUTION
@@ -381,11 +381,9 @@ class TrajView(pg.GraphicsLayoutWidget):
         tr.scale(C.XY_RESOLUTION, C.XY_RESOLUTION)
         
         self.hmap_item.setTransform(tr)
-        
-        # Dodajemy na sam spód (z-index niski)
         self.hmap_item.setZValue(-10)
         self.view_trajectory.addItem(self.hmap_item)
-        print("[Vis] Heatmapa heurystyki narysowana.")
+        print("[TrajView] Mapa heurystyki narysowana.")
 
     @QtCore.pyqtSlot(bool)
     def on_parking_change(self, is_parking):

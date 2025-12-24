@@ -8,7 +8,7 @@ import sys
 import visualise as vis
 import camera_calibration as cc
 import fisheye_camera_calibration as fcc
-from park_algo import TrajStateMachine,Kalman,OccupancyGrid,wrap_angle,C,PlanningWorker
+from park_algo import TrajStateMachine,Kalman,OccupancyGrid,wrap_angle,mod2pi,C,PlanningWorker
 import stereo_yolo as sy
 from ultralytics import YOLO
 
@@ -511,8 +511,6 @@ class MainWorker(vis.QtCore.QObject):
         node_pos0 = np.zeros(3)
 
         # do odometrii
-
-
         im0 = [0.0,0.0,0.0]
         gp0 = [0.0,0.0,0.0]
         x_odo = 0.0
@@ -528,7 +526,7 @@ class MainWorker(vis.QtCore.QObject):
         rear_radius = driver.getRearWheelRadius()
         wheelbase = driver.getWheelbase()
         # dla enkoderów i prędkości z odometrii
-        encoders = np.zeros(4)
+        curr_enc = np.zeros(4)
         enc0 = np.zeros(4)
         wheel_speeds = np.zeros(4)
         # przeszłe enkodery
@@ -536,33 +534,20 @@ class MainWorker(vis.QtCore.QObject):
         enc_ok = False
         
         def get_speed_odo(dt):
-            nonlocal enc_ok
-            # for i in range(4):
-            #     raw = driver.getWheelEncoder(i)
-            #     if not np.isfinite(raw):
-            #         return 0.0, encoders
-
-            if not enc_ok:
-                for i in range(4):
-                    enc0[i] = driver.getWheelEncoder(i)
-                    prev_enc[i] = 0.0
-                enc_ok = True
-                return 0.0, encoders
+            raw_enc = [driver.getWheelEncoder(i) for i in range(4)]
             #liczymy enkodery
             for i in range(4):
-                encoders[i] = driver.getWheelEncoder(i) - enc0[i]
-                wheel_speeds[i] = (encoders[i] - prev_enc[i]) / dt
-                prev_enc[i] = encoders[i]
+                curr_enc[i] = raw_enc[i] - enc0[i]
+                wheel_speeds[i] = (raw_enc[i] - prev_enc[i]) / dt
+                prev_enc[i] = raw_enc[i]
 
             #speed = 0.5 * (wheel_speeds[0] + wheel_speeds[1]) * front_radius
             # speed = 0.25 * (wheel_speeds[0] + wheel_speeds[1]) * front_radius + \
             #         0.25 * (wheel_speeds[2] + wheel_speeds[3]) * rear_radius
             speed = 0.5 * (wheel_speeds[2] + wheel_speeds[3]) * rear_radius
                 
-            return speed,encoders
-       
-            
-    
+            return speed,curr_enc
+        
         def webots_to_odom_xy(dx,dy,yaw0):
             c = np.cos(yaw0); s = np.sin(yaw0)
             # obrót o -yaw0
@@ -630,7 +615,7 @@ class MainWorker(vis.QtCore.QObject):
         R0 = np.eye(3)
 
         def get_pose(dt):
-            
+            # liczy z odometrii pozę samochodu, 
             nonlocal psi,x_odo,y_odo,gp0,im0,node_pos0,yaw_est,R0
             # nadanie wartości początkowych
             if self.first_call_pose:
@@ -639,43 +624,61 @@ class MainWorker(vis.QtCore.QObject):
                 psi = 0.0
                 gp0 = gps.getValues()
                 im0 = imu.getRollPitchYaw()
+                raw_enc = [driver.getWheelEncoder(i) for i in range(4)]
                 for i in range(4):
-                    enc0[i] = driver.getWheelEncoder(i)
-                    prev_enc[i] = 0.0
+                    enc0[i] = raw_enc[i]
+                    prev_enc[i] = raw_enc[i]
                 node_pos0 = self.node.getPosition()
+                
                 R0 = R_xyz(im0[2], im0[1], im0[0])   # orientacja początkowa
                 self.first_call_pose = False
-                
+                return {
+                    "sp_odo": 0.0,
+                    "im": [0.0, 0.0, 0.0],
+                    "delta": 0.0,
+                    "psi": 0.0,
+                    "dt": dt,
+                    "x_odo": 0.0,
+                    "y_odo": 0.0,
+                    "encoders": [0.0]*4,
+                    "node_pos": [0.0, 0.0, 0.0],
+                    "acc": [0.0, 0.0, 0.0],
+                    "node_vel": [0.0, 0.0, 0.0],
+                    "node_vel_x": 0.0
+                }
             # supervisor
             node_pos = self.node.getPosition()
             node_vel = self.node.getVelocity()
-                                                                  
-            
             # imu
             rpy = imu.getRollPitchYaw()
-            yaw_imu = wrap_angle(rpy[2] - im0[2])
-            im = [wrap_angle(rpy[0] - im0[0]), wrap_angle(rpy[1] - im0[1]), yaw_imu]
+            yaw_imu = mod2pi(rpy[2] - im0[2])
+            #yaw_imu = rpy[2]
+            im = [mod2pi(rpy[0] - im0[0]), mod2pi(rpy[1] - im0[1]), yaw_imu]
             
             
             R = R_xyz(rpy[2], rpy[1], rpy[0])   # ZYX
             
             node_vel_xyz = R.T @ np.array(node_vel[:3])
+            #node_vel_xyz = node_vel
             node_vel_x = node_vel_xyz[0]  
-            # żyroskop
-            gyr = gyro.getValues()
             #odometria, przednie koła
             sp_odo,encoders = get_speed_odo(dt)
             delta = -driver.getSteeringAngle()  # kąt skrętu kół [rad]
-            psi = psi + (sp_odo * np.tan(delta) / wheelbase) * dt
+            # aktualizacja z uśrednieniem psi, później się dodaje
+            dpsi = (sp_odo * np.tan(delta) / wheelbase) * dt
+            psi = psi + dpsi/2
             
             #yaw_real = wrap_angle(0.995*yaw_est + 0.005*psi)
-            yaw_real = wrap_angle(psi)
+            yaw_real = mod2pi(psi)
             x_odo += sp_odo * dt * np.cos(yaw_real)
             y_odo += sp_odo * dt * np.sin(yaw_real)
+            # dodaję pozostałą połówkę kąta
+            psi = mod2pi(psi + dpsi/2)
             # supervisor
             
             x_node,y_node = webots_to_odom_xy(node_pos[0] - node_pos0[0],node_pos[1] - node_pos0[1],im0[2])
             node_pos = [x_node,y_node,node_pos[2] - node_pos0[2]]
+            #node_pos = node_pos
             
             # akcelerometr
             accer = acc.getValues()
@@ -753,20 +756,23 @@ class MainWorker(vis.QtCore.QObject):
         p1 = None
         warmstart = model(np.ones((4,1,3)),half=True,device = 0,conf=0.6,verbose=False,imgsz=(640,480))
 
-        while robot.step(96) != -1:
+        while robot.step(32) != -1:
             vis.QtCore.QCoreApplication.processEvents()
             now = driver.getTime()
             now_real = time.time()
             dt_real = now_real - prev_real
             
+            now = driver.getTime()
+            dt_sim = now - prev_time
+            pose_measurements = get_pose(dt_sim)
+            prev_real = now
+            prev_time = now
             names_images = dict(zip(camera_names, [get_camera_image(c) for c in cameras]))
             image = names_images[name].copy()
+            
             if cont.parking:
                 
-                now = driver.getTime()
-                dt_sim = now - prev_time
-                
-                pose_measurements = get_pose(dt_sim)
+                tsm.update(now_real,dt_sim)
                 
                 x_odo = pose_measurements["x_odo"]
                 y_odo = pose_measurements["y_odo"]
@@ -795,8 +801,10 @@ class MainWorker(vis.QtCore.QObject):
                     ogm.interpret_readings({**front_names_dists,**rear_names_dists,**left_side_names_dists,**right_side_names_dists},(x_odo,y_odo,yaw_odo))
                     # mamy macierz grid tych wielkości; z nich trzeba przemnożyć na xy_resolution te indeksy, aby otrzymać właściwe pozycje przeszkód, są większe lub równe od 0
                     ox,oy = ogm.extract_obstacles()
+                    #ox,oy = [],[]
                     find_type = 'parallel'
                     side = 'right'
+                    
                     results = model(image,half=True,device = 0,conf=0.6,verbose=False,imgsz=(640,480))
                     if results is not None:
                         for box in results[0].boxes.xyxy.cpu().numpy():  # [x1,y1,x2,y2]
@@ -822,6 +830,7 @@ class MainWorker(vis.QtCore.QObject):
                             
                         cv2.namedWindow("yolo", cv2.WINDOW_NORMAL)
                         cv2.imshow("yolo", image)
+                    
                     
                     if len(ox) > 0:
                         cls = ogm.analyze_clusters((x_odo,y_odo,yaw_odo)) # ack to żeby potwierdzić że jest np. co najmniej jedno miejsce
@@ -1113,8 +1122,9 @@ class MainWorker(vis.QtCore.QObject):
             elif not cont.parking:
                 self.first_call_pose = True
                 self.first_call_traj = True
-                prev_time = driver.getTime()
-                prev_real = time.time()
+                #prev_time = driver.getTime()
+                #prev_real = time.time()
+                
                 
             #if now - last_key_time >= KEYBOARD_INTERVAL:
             check_keyboard(cont)
