@@ -52,16 +52,16 @@ class C:
     MAX_CURVATURE = 1/MAX_RADIUS
     # parametry dla A*
     c_val = 1.0
-    FORWARD_COST = c_val*1.2
-    BACKWARD_COST = c_val*1.0
-    GEAR_CHANGE_COST = c_val*5.0
-    STEER_CHANGE_COST = c_val*3.0
-    #STEER_ANGLE_COST = c_val*0.5
+    FORWARD_COST = c_val*3.0
+    BACKWARD_COST = c_val*2.0
+    GEAR_CHANGE_COST = c_val*10.0
+    STEER_CHANGE_COST = c_val*5.0
+    STEER_ANGLE_COST = c_val*2.5
     OBS_COST = c_val*5.0
     H_COST = 1.0
     # parametry dla próbkowania
     XY_RESOLUTION = 0.1 # m
-    YAW_RESOLUTION = np.deg2rad(15)
+    YAW_RESOLUTION = np.deg2rad(5)
     # parametry dla Stanley
     K_STANLEY = 0.5
 
@@ -87,7 +87,7 @@ class PriorityQueue:
     def push(self, node:Node):
         cell = node.cell
         existing:Node = self.nodes.get(cell)
-        if existing is None or node.g_cost < existing.g_cost - 1e-6:
+        if existing is None or node.f_cost < existing.f_cost + 1e-2:
             self.heap[cell] = node.f_cost
             self.nodes[cell] = node
 
@@ -103,9 +103,6 @@ class PriorityQueue:
     
     def empty(self):
         return len(self.heap) == 0
-
-
-    
 
 class NewOccupancyGrid():
     def __init__(self):
@@ -246,8 +243,8 @@ class NewPlanner(QtCore.QObject):
         self.xy_resolution = C.XY_RESOLUTION
         self.yaw_resolution = C.YAW_RESOLUTION  
         self.expansion_counter = 0.0
-        self.step_size = 0.5
-        self.n_steers = 5
+        self.step_size = 1.0
+        self.n_steers = 3
         self.actions = self.calc_actions()
         self.hmap = None
         self.dist_map = None
@@ -257,31 +254,22 @@ class NewPlanner(QtCore.QObject):
 
     def calc_actions(self):
         motion_actions = []
-        steers = np.linspace(-C.MAX_WHEEL_ANGLE, C.MAX_WHEEL_ANGLE, self.n_steers,endpoint=True)
+        steers = np.linspace(-C.MAX_WHEEL_ANGLE, C.MAX_WHEEL_ANGLE, self.n_steers)
         steers = np.unique(np.concatenate([steers, np.array([0.0])]))  
         for delta in steers:
             for direction in ["forward", "reverse"]:
                 motion_actions.append((delta, direction))
         return motion_actions
     
-    # def discretize_state(self,cur_node_state) -> tuple:
-    #     x, y, theta = cur_node_state
-    #     yaw_bins = int(round(2*np.pi / self.yaw_resolution))
-    #     yaw_i = int(round((theta % (2*np.pi)) / self.yaw_resolution)) % yaw_bins
-    #     return (
-    #         int(round(x / self.xy_resolution)),
-    #         int(round(y / self.xy_resolution)),
-    #         yaw_i
-    #     )
-    def discretize_state(self,cur_node_state,direction) -> tuple:
+    def discretize_state(self,cur_node_state) -> tuple:
         x, y, theta = cur_node_state
         yaw_bins = int(round(2*np.pi / self.yaw_resolution))
         yaw_i = int(round((theta % (2*np.pi)) / self.yaw_resolution)) % yaw_bins
-
-        return (int(round(x/self.xy_resolution)),
-                int(round(y/self.xy_resolution)),
-                yaw_i,
-                direction)
+        return (
+            int(round(x / self.xy_resolution)),
+            int(round(y / self.xy_resolution)),
+            yaw_i
+        )
     
     def in_bounds(self,cell):
         # hmap, minx, miny, xw, yw
@@ -299,7 +287,7 @@ class NewPlanner(QtCore.QObject):
         all_x = [sx, gx]
         all_y = [sy, gy]
 
-        collision_radius = 0.5
+        collision_radius = 1.0
         obs_polygons = []
         for obs in obstacles:
             corners = grid.get_rect_corners(obs['center'],obs['length']+ 2 * collision_radius,obs['width']+ 2 * collision_radius,obs['angle'])
@@ -309,7 +297,7 @@ class NewPlanner(QtCore.QObject):
                 all_y.append(p[1])
 
         
-        pad = 2
+        pad = 8
         minx = int(np.floor((min(all_x) - pad )/ self.xy_resolution)) 
         maxx = int(np.ceil((max(all_x) + pad )/ self.xy_resolution)) 
         miny = int(np.floor((min(all_y) - pad )/ self.xy_resolution)) 
@@ -340,13 +328,18 @@ class NewPlanner(QtCore.QObject):
             mask = (np.abs(local_x) <= l/2) & (np.abs(local_y) <= w/2)
 
             obs_map[mask] = True
-        # dist_map = distance_transform_edt(~obs_map) * self.xy_resolution
-        # self.dist_map = dist_map
-        # potential_map = np.zeros_like(dist_map)
+        dist_map = distance_transform_edt(~obs_map) * self.xy_resolution
+        self.dist_map = dist_map
+        potential_map = np.zeros_like(dist_map)
 
-        # potential_map = 1.0*np.exp(-1.0 * dist_map) 
-        
-        # cost_map = 1.0 + potential_map 
+        potential_map = 1.0*np.exp(-5.0 * dist_map) 
+        # alpha = 5.0 * C.OBS_COST
+        # coll_zone = dist_map < safe_distance
+        # d_vals = np.maximum(dist_map[coll_zone], 0.05) 
+        # potential_map[coll_zone] = alpha * (1.0 - (d_vals / safe_distance))
+        # potential_map[coll_zone] = 1.0 / (2.0 * (d_vals ** 2))
+        # cost_map = 1.0 + potential_map * 2.0
+        cost_map = 1.0 + potential_map 
         
         goal_node_x = int(gx / self.xy_resolution) - minx
         goal_node_y = int(gy / self.xy_resolution) - miny
@@ -378,33 +371,46 @@ class NewPlanner(QtCore.QObject):
                 
                 if 0 <= nx < xw and 0 <= ny < yw:
                     if not obs_map[nx, ny]:
+                        cell_penalty = cost_map[nx,ny] 
+                        #cell_penalty = 1.0
 
-                        new_cost = cost + move_cost
+                        new_cost = cost + move_cost * cell_penalty
                         if new_cost < hmap[nx, ny]:
                             hmap[nx, ny] = new_cost
                             heapq.heappush(open_set, (new_cost, nx, ny))
         
-        #self.current_potential_map = potential_map
+        self.current_potential_map = potential_map
         self.map_offset_x = minx
         self.map_offset_y = miny               
         return hmap, minx, miny, xw, yw
     
     def calculate_hybrid_heuristic(self,pose,goal_pose):
-        min_c = min(C.FORWARD_COST, C.BACKWARD_COST)
-        
-        # h_rs = 0.0
-        # path_segments = reeds_shepp.path_type(
-        #     pose,
-        #     goal_pose,
-        #     C.MAX_RADIUS
-        # )
-        # # abs(length) * self.step_size *
-        # for i in range(len(path_segments)-1):
-        #     (ctype,length) = path_segments[i]
-        #     segment_cost = abs(length) * (C.FORWARD_COST if length >= 0 else C.BACKWARD_COST)
-        #     h_rs += segment_cost
-        
-        h_rs = reeds_shepp.path_length(pose, goal_pose, C.MAX_RADIUS) 
+        #h_rs = reeds_shepp.path_length(pose, goal_pose, C.MAX_RADIUS)
+        p_rs = reeds_shepp.path_sample(pose, goal_pose, C.MAX_RADIUS,self.step_size)
+        h_rs = 0.0
+        path_segments = reeds_shepp.path_type(
+            pose,
+            goal_pose,
+            C.MAX_RADIUS
+        )
+        # abs(length) * self.step_size *
+        for i in range(len(path_segments)-1):
+            (ctype,length) = path_segments[i]
+            segment_cost = abs(length) * (C.FORWARD_COST if length >= 0 else C.BACKWARD_COST)
+            h_rs += segment_cost
+            if i < len(path_segments) - 1:
+                next_len = path_segments[i+1][1]
+                if length * next_len < 0: 
+                    h_rs += C.GEAR_CHANGE_COST
+            if ctype != 2: 
+                h_rs += abs(length) * C.STEER_ANGLE_COST * C.MAX_WHEEL_ANGLE
+        for i in range(0,len(p_rs),1):        
+            if hasattr(self, 'current_potential_map'):
+                mx = int(round(p_rs[i][0] / self.xy_resolution)) - self.map_offset_x
+                my = int(round(p_rs[i][1] / self.xy_resolution)) - self.map_offset_y
+                pmap = self.current_potential_map
+                if 0 <= mx < pmap.shape[0] and 0 <= my < pmap.shape[1]:
+                    h_rs += pmap[mx, my] * C.OBS_COST
         dist = np.hypot(goal_pose[0] - pose[0], goal_pose[1] - pose[1])
         h_a_star = dist 
         if self.hmap is not None:
@@ -416,23 +422,22 @@ class NewPlanner(QtCore.QObject):
                 v = h_map[pose_cell_x, pose_cell_y] * self.xy_resolution
                 if np.isfinite(v):
                     h_a_star = v
-                else:
-                    h_a_star = dist
         
-        return max(h_a_star * min_c,h_rs) 
+        return max(h_a_star,h_rs) * C.H_COST
         
     def simulate_motion(self, state, delta, direction):
         x, y, theta = state
         d = 1.0 if direction == "forward" else -1.0
         theta_new = mod2pi(theta + np.tan(delta)/C.WHEELBASE * self.step_size)
-        #theta = theta_new
-        x_new = x + d * self.step_size * np.cos(theta_new)
-        y_new = y + d * self.step_size * np.sin(theta_new)
+        theta = (theta + theta_new) / 2
+        x_new = x + d * self.step_size * np.cos(theta)
+        y_new = y + d * self.step_size * np.sin(theta)
         return (x_new, y_new, theta_new)
     
     def get_neighbours(self, node:Node, grid:NewOccupancyGrid):
         neighbours = []
         
+        # 6 akcji sterujących
         actions = self.actions
         for delta,direction in actions:
             next_state = self.simulate_motion(
@@ -445,7 +450,7 @@ class NewPlanner(QtCore.QObject):
 
             cost = self.motion_cost(node, next_state, delta, direction)
             neighbour = Node(
-                cell=self.discretize_state(next_state,direction),
+                cell=self.discretize_state(next_state),
                 state=next_state,
                 delta=delta,
                 direction=direction,
@@ -458,36 +463,31 @@ class NewPlanner(QtCore.QObject):
         return neighbours   
     
     def motion_cost(self, node:Node, to_state, delta, direction):
-        dx = to_state[0] - node.state[0]
-        dy = to_state[1] - node.state[1]
         dyaw = to_state[2] - node.state[2]
-        dist = np.hypot(dx,dy)
+        dist = abs(C.MAX_RADIUS * dyaw)
         
-        cost = 0.0
+        
         if direction == "forward":
-            if node.direction != direction:
-                if abs(node.delta - delta) > 1e-2:
-                    cost += dist * C.STEER_CHANGE_COST * C.GEAR_CHANGE_COST * C.FORWARD_COST
-                else:
-                    cost += dist * C.GEAR_CHANGE_COST * C.FORWARD_COST
-            else:
-                cost += dist * C.FORWARD_COST
+            cost = dist * C.FORWARD_COST
         else:
-            if node.direction != direction:
-                if abs(node.delta - delta) > 1e-2:
-                    cost += dist * C.STEER_CHANGE_COST * C.GEAR_CHANGE_COST *C.BACKWARD_COST
-                else:
-                    cost += dist * C.GEAR_CHANGE_COST * C.BACKWARD_COST
-            else:
-                cost += dist * C.BACKWARD_COST
+            cost = dist * C.BACKWARD_COST
+        if node.direction != direction:
+            cost += C.GEAR_CHANGE_COST
         
-        # if hasattr(self, 'current_potential_map'):
-        #     mx = int(np.floor(to_state[0] / self.xy_resolution)) - self.map_offset_x
-        #     my = int(np.floor(to_state[1] / self.xy_resolution)) - self.map_offset_y
-        #     pmap = self.current_potential_map
-        #     if 0 <= mx < pmap.shape[0] and 0 <= my < pmap.shape[1]:
+        cost += C.STEER_ANGLE_COST * abs(delta) 
+
+        if abs(node.delta - delta) > 0.01:
+            cost += C.STEER_CHANGE_COST * abs(node.delta - delta) 
+
+        if hasattr(self, 'current_potential_map'):
+            mx = int(np.floor(to_state[0] / self.xy_resolution)) - self.map_offset_x
+            my = int(np.floor(to_state[1] / self.xy_resolution)) - self.map_offset_y
+            pmap = self.current_potential_map
+            # * dist
+            # Sprawdzenie zakresu mapy
+            if 0 <= mx < pmap.shape[0] and 0 <= my < pmap.shape[1]:
                 
-        #         cost += pmap[mx, my] * C.OBS_COST 
+                cost += pmap[mx, my] * C.OBS_COST 
         return cost
 
     def try_reeds_shepp(self,node:Node,goal_pose,grid:NewOccupancyGrid):
@@ -501,10 +501,29 @@ class NewPlanner(QtCore.QObject):
             (rs_xs,rs_ys,rs_yaws,rs_deltas,rs_segment_lengths) = rs_path[i]
             if grid.is_collision(rs_xs,rs_ys,rs_yaws):
                 return None,None
-        
+        #     
+
+        # path_cost = 0.0
+        # path_segments = reeds_shepp.path_type(
+        #     node.state,
+        #     goal_pose,
+        #     C.MAX_RADIUS
+        # )
+        # for i in range(len(path_segments)-1):
+        #     (ctype,length) = path_segments[i]
+        #     segment_cost = abs(length) * (C.FORWARD_COST if length >= 0 else C.BACKWARD_COST)
+        #     path_cost += segment_cost
+        #     if i < len(path_segments) - 1:
+        #         next_len = path_segments[i+1][1]
+        #         if length * next_len < 0: 
+        #             path_cost += C.GEAR_CHANGE_COST
+        #     if ctype != 2: 
+        #         path_cost += abs(length) * C.STEER_ANGLE_COST * C.MAX_WHEEL_ANGLE
+        # # 
+        # total_risk_penalty = trajectory_risk_cost * C.OBS_COST * self.step_size
         path_cost = reeds_shepp.path_length(node.state,goal_pose,C.MAX_RADIUS)
         goal_node = Node(
-            cell=self.discretize_state(goal_pose,node.direction),
+            cell=self.discretize_state(goal_pose),
             state=goal_pose,
             delta=0.0,
             direction=node.direction,
@@ -548,14 +567,9 @@ class NewPlanner(QtCore.QObject):
     def should_try_rs(self, node, goal):
         d = np.hypot(node.state[0]-goal[0], node.state[1]-goal[1])
         if d < 5.0:   return (self.expansion_counter % 5) == 0
-        if d < 15.0:  return (self.expansion_counter % 10) == 0
-        return (self.expansion_counter % 20) == 0
-    def is_goal(self, pose, goal_pose):
-        dx = pose[0] - goal_pose[0]
-        dy = pose[1] - goal_pose[1]
-        d = np.hypot(dx, dy)
-        dyaw = abs(mod2pi(pose[2] - goal_pose[2]))
-        return (d <= self.goal_tolerance) and (dyaw <= self.yaw_resolution)
+        if d < 15.0:  return (self.expansion_counter % 15) == 0
+        return (self.expansion_counter % 40) == 0
+    
     def hybrid_a_star_planning(self,start_pose,goal_pose,grid:NewOccupancyGrid):
         
         print("[Planner] Zaczęto planowanie")
@@ -572,7 +586,7 @@ class NewPlanner(QtCore.QObject):
         init_dir = "forward" if angle_diff < np.pi/2 else "reverse"
 
         start_node = Node(
-            cell = self.discretize_state(start_pose,init_dir),
+            cell = self.discretize_state(start_pose),
             state=start_pose,
             delta = 0.0,
             direction=init_dir,
@@ -590,54 +604,50 @@ class NewPlanner(QtCore.QObject):
             
             current_node = open_set.pop() 
             current_cell = current_node.cell
-            #if not self.in_bounds(current_cell): continue
+            if not self.in_bounds(current_cell): continue
+            # if best_goal_node is not None and current_node.f_cost >= best_goal_node.g_cost:
+            #     print(f"[Planner] Znaleziono optymalną trasę! Koszt: {best_goal_node.g_cost:.2f}")
+                
+            #     return self.reconstruct_path(best_rs_path, start_node, best_goal_node)
             
-            if current_cell in closed_set:
-                if closed_set[current_cell] <= current_node.g_cost:
-                    continue # już byliśmy tu
-            closed_set[current_cell] = current_node.g_cost
-            #closed_set[current_cell] = True
-
+            
+            
+            # rs_path, possible_goal_node = self.try_reeds_shepp(current_node, goal_pose, grid)
+            
+            # if rs_path is not None and possible_goal_node is not None:
+            #     if best_goal_node is None or possible_goal_node.g_cost < best_goal_node.g_cost:
+            #         best_goal_node = possible_goal_node
+            #         best_rs_path = rs_path
             if self.should_try_rs(current_node,goal_pose):
                 rs_path, possible_goal_node = self.try_reeds_shepp(current_node, goal_pose, grid)
                 if rs_path is not None and possible_goal_node is not None:
                     print(f"[Planner] Znaleziono optymalną trasę! Koszt: {possible_goal_node.g_cost:.2f}")
                     return self.reconstruct_path(rs_path, start_node, possible_goal_node)
-                
-            if self.is_goal(current_node.state, goal_pose):
-                goal_node = Node(
-                    cell=current_node.cell,
-                    state=goal_pose,
-                    delta=current_node.delta,
-                    direction=current_node.direction,
-                    g_cost=current_node.g_cost,
-                    h_cost=0.0,
-                    parent=current_node
-                )
-                return self.reconstruct_path([], start_node, goal_node)
-            
-                
+            if current_cell in closed_set:
+                if closed_set[current_cell] <= current_node.g_cost:
+                    continue # już byliśmy tu
+            closed_set[current_cell] = current_node.g_cost
+
             neighbours = self.get_neighbours(current_node,grid)
             
             for neighbour in neighbours:
                 neighbour_cell = neighbour.cell
-                same_cell = (neighbour_cell == current_cell)
-                #if same_cell: continue
-                if (neighbour_cell in closed_set) and (closed_set[neighbour_cell] <= neighbour.g_cost) and (not same_cell):
-                    continue
-                existing = open_set.get_node(neighbour_cell) if open_set.contains(neighbour_cell) else None
-                better_path = (existing is None) or (neighbour.g_cost < existing.g_cost - 1e-6) or same_cell
-                if not better_path:
+
+                if neighbour_cell in closed_set and closed_set[neighbour_cell] <= neighbour.g_cost:
                     continue
                 neighbour.h_cost = self.calculate_hybrid_heuristic(neighbour.state,goal_pose)
+                # neighbour.g_cost 
                 neighbour.f_cost = neighbour.g_cost + neighbour.h_cost
-                if same_cell:
-                    if neighbour.f_cost > current_node.f_cost + 1e-2: # tie breaker
-                        continue
-                    neighbour.parent = current_node.parent
-                #elif same_cell and neighbour.f_cost <= current_node.f_cost + 1e-2:
-                open_set.push(neighbour)
-                
+
+                # if best_goal_node is not None and neighbour.f_cost >= best_goal_node.g_cost:
+                #     continue
+
+                if not open_set.contains(neighbour_cell):
+                    open_set.push(neighbour)
+                # else:
+                #     existing = open_set.get_node(neighbour_cell)
+                #     if neighbour.g_cost < existing.g_cost:
+                #         open_set.push(neighbour)
             
             self.expansionData.emit(current_node.state)
             print(f"[Planner] h_cost:{current_node.h_cost}, g_cost:{current_node.g_cost}, f_cost:{current_node.f_cost}")

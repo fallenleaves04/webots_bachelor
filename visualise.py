@@ -131,6 +131,7 @@ class TrajView(pg.GraphicsLayoutWidget):
 
         self.running = True
         self.controller = cont
+        self.path_car_inserted = False
         # siatka 2, trajektoria
         #self.nextColumn()  # obok, w tej samej linii
         self.view_trajectory = self.addPlot(lockAspect=True)
@@ -162,22 +163,14 @@ class TrajView(pg.GraphicsLayoutWidget):
         #
         self.path_drawn = False
         self.car_rect = self.make_car()
-
+        pen = pg.mkPen(None)
+        self.car_rect.setPen(pen)
+        self.car_rect.setBrush(QtGui.QBrush(QtGui.QColor(60, 10, 60, 170)))
+        self.view_trajectory.addItem(self.car_rect)
         #
         self.obstacle_items = []
         self.spots_items = []
         self.text_items = []
-        self.arrow = pg.ArrowItem(
-            pos=(0.0, 0.0),
-            angle=np.degrees(0.0),
-            headLen=25,        # px
-            tipAngle=30,       # stopnie (szerokość grotu)
-            tailLen=60,        # px długość „trzonu”
-            tailWidth=10,      # px grubość „trzonu”
-            pen=pg.mkPen(0,0,0, width=2),
-            brush=QtGui.QBrush(QtGui.QColor(20,20,20))
-        )
-        #self.view_trajectory.addItem(self.arrow)
         
         self.view_trajectory.scene().sigMouseClicked.connect(self.on_mouse_click)
 
@@ -186,8 +179,9 @@ class TrajView(pg.GraphicsLayoutWidget):
         cont.pathUpdated.connect(self.draw_path)
         cont.expansionUpdated.connect(self.draw_expansion_cars)
         cont.hmapUpdated.connect(self.draw_hmap)
+        cont.pathCarUpdated.connect(self.draw_path_car)
         
-    def make_car(self,x_center=0.0,y_center=0.0,l_c=CAR_LENGTH,w_c=CAR_WIDTH,yaw=0.0):
+    def make_car(self,l_c=C.CAR_LENGTH,w_c=C.CAR_WIDTH):
         pts = [
             QtCore.QPointF(-1, -w_c/2),
             QtCore.QPointF(l_c-1, -w_c/2),
@@ -197,14 +191,6 @@ class TrajView(pg.GraphicsLayoutWidget):
         polygon = QtGui.QPolygonF(pts)
         car = QtWidgets.QGraphicsPolygonItem(polygon)
         t = QtGui.QTransform()
-        car.setTransformOriginPoint(QtCore.QPointF(1,w_c/2))
-        t.translate(x_center, y_center)
-        t.rotate(np.degrees(yaw), QtCore.Qt.ZAxis)   
-        car.setTransform(t)
-        pen = pg.mkPen(color=(0, 0, 0), width=1)
-        car.setPen(pen)
-        car.setBrush(QtGui.QBrush(QtGui.QColor(80,80,80,150)))
-        self.view_trajectory.addItem(car)
         return car 
     def make_rect(self,x_center,y_center,l_c,w_c,yaw):
         pts = [
@@ -317,14 +303,23 @@ class TrajView(pg.GraphicsLayoutWidget):
         self.t4x.clear();self.t4y.clear()
         self.t5x.clear();self.t5y.clear()
         car_yaw = data[0][2]
-        t = QtGui.QTransform()
-        t.translate(x1, y1)
-        t.rotate(np.degrees(car_yaw))  
-        self.car_rect.setTransform(t)
+        self.transform_car_item(self.car_rect,(x1,y1,car_yaw))
 
     @QtCore.pyqtSlot(object)
+    def draw_path_car(self,pose):
+        if not self.path_car_inserted:
+            self.path_car_item = self.make_car()
+            pen = pg.mkPen(None)
+            self.path_car_item.setPen(pen)
+            self.path_car_item.setBrush(QtGui.QBrush(QtGui.QColor(110, 110, 110, 50)))
+            self.path_car_item.setZValue(-10) 
+            self.view_trajectory.addItem(self.path_car_item)
+            self.path_car_inserted = True
+        self.transform_car_item(self.path_car_item,pose)
+    @QtCore.pyqtSlot(object)
     def draw_path(self, path):
-        
+        if not self.controller.parking or self.controller.state == "inactive":
+            return
         self.t6x = path.xs[:] 
         self.t6y = path.ys[:]
         self.traj_curve6.setData(self.t6x,self.t6y)
@@ -340,9 +335,12 @@ class TrajView(pg.GraphicsLayoutWidget):
 
     @QtCore.pyqtSlot(object)
     def draw_expansion_cars(self,car_pos):
-        x, y, yaw = car_pos
-        car_item = self.make_car(x,y,yaw)
-        #self.transform_car_item(car_item,car_pos)
+        car_item = self.make_car()
+        pen = pg.mkPen(None)
+        car_item.setPen(pen)
+        car_item.setBrush(QtGui.QBrush(QtGui.QColor(220, 220, 220, 10)))
+        car_item.setZValue(-10) 
+        self.transform_car_item(car_item,car_pos)
         self.view_trajectory.addItem(car_item)
 
     @QtCore.pyqtSlot(object)
@@ -391,10 +389,15 @@ class TrajView(pg.GraphicsLayoutWidget):
         if is_parking:
             self.show()
         else:
-            del self.t1x[:]
-            del self.t1y[:]
-            del self.t2x[:]
-            del self.t2y[:]
+            self.t1x.clear(); self.t1y.clear()
+            self.t2x.clear(); self.t2y.clear()
+            self.t6x.clear(); self.t6y.clear()
+            self.traj_curve1.setData([], [])
+            self.traj_curve2.setData([], [])
+            self.traj_curve6.setData([], [])   
+            self.traj_curve3.setData([], [])
+            self.traj_curve4.setData([], [])
+            self.traj_curve_yolo.setData([], [])
             self.hide()
 
 class SensorView(pg.GraphicsLayoutWidget):

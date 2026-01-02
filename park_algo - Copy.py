@@ -14,38 +14,10 @@ from scipy.ndimage import distance_transform_edt
 from skimage.morphology import medial_axis
 from typing import List
 import traceback
-
 """
 Parametry samochodu
 """
 # Vehicle parameters
-# class C:
-#     # parametry samochodu 
-#     TRACK_FRONT = 1.628
-#     TRACK_REAR = 1.628
-#     WHEELBASE = 2.995
-#     MAX_WHEEL_ANGLE = 0.5  # rad
-#     CAR_WIDTH = 1.95
-#     CAR_LENGTH = 4.85
-#     MAX_SPEED = -3.0
-#     MAX_RADIUS = WHEELBASE/np.tan(MAX_WHEEL_ANGLE)
-#     MAX_CURVATURE = 1/MAX_RADIUS
-#     # parametry dla A*
-#     c_val = 1
-#     FORWARD_COST = c_val*1.5
-#     BACKWARD_COST = c_val*1.0
-#     GEAR_CHANGE_COST = c_val*15.0
-#     STEER_CHANGE_COST = c_val*2.5
-#     STEER_ANGLE_COST = c_val*2.0
-#     OBS_COST = c_val*5.0
-#     H_COST = 5.0
-#     # parametry dla próbkowania
-#     XY_RESOLUTION = 0.1 # m
-#     YAW_RESOLUTION = np.deg2rad(5)
-#     # parametry dla Stanley
-#     K_STANLEY = 0.5
-
-# z pyt1.py, można zamienić później
 class C:
     # parametry samochodu 
     TRACK_FRONT = 1.628
@@ -54,25 +26,23 @@ class C:
     MAX_WHEEL_ANGLE = 0.5  # rad
     CAR_WIDTH = 1.95
     CAR_LENGTH = 4.85
-    MAX_SPEED = 1.0
+    MAX_SPEED = -3.0
     MAX_RADIUS = WHEELBASE/np.tan(MAX_WHEEL_ANGLE)
     MAX_CURVATURE = 1/MAX_RADIUS
     # parametry dla A*
-    c_val = 1.5
-    FORWARD_COST = c_val*1.2
-    BACKWARD_COST = c_val*1.2
-    GEAR_CHANGE_COST = c_val*3.0
-    STEER_CHANGE_COST = c_val*1.5
-    STEER_ANGLE_COST = c_val*1.2
+    c_val = 1
+    FORWARD_COST = c_val*1.5
+    BACKWARD_COST = c_val*1.0
+    GEAR_CHANGE_COST = c_val*15.0
+    STEER_CHANGE_COST = c_val*2.5
+    STEER_ANGLE_COST = c_val*2.0
     OBS_COST = c_val*5.0
-    H_COST = 1.0
+    H_COST = 5.0
     # parametry dla próbkowania
     XY_RESOLUTION = 0.1 # m
     YAW_RESOLUTION = np.deg2rad(5)
-
     # parametry dla Stanley
     K_STANLEY = 0.5
-
 
 def wrap_angle(a):
     return np.arctan2(np.sin(a), np.cos(a))
@@ -94,9 +64,113 @@ def build_pose_matrix(pose:np.ndarray):
     T[:3, 3] = position
     return T
 
+"""
+DLA STANLEY, SKOPIOWANE Z https://github.com/zhm-real/MotionPlanning I DOPASOWANE
+"""
+    
+class Trajectory:
+    def __init__(self, cx, cy, cyaw,ccurv):
+        self.cx = cx
+        self.cy = cy
+        self.cyaw = cyaw
+        self.ccurv = ccurv
+        self.ind_old = 0
+
+        self.int_v = 0.0
+        self.kp = 0.1
+        self.ki = 0.6
+        self.kd = 0.001
+
+        self.len = len(self.cx)
+        self.s0 = 1
+
+    def calc_theta_e_and_er(self, x,y,yaw):
+        """
+        calc theta_e and er.
+        theta_e = theta_car - theta_path
+        er = lateral distance in frenet frame
+
+        :param node: current information of vehicle
+        :return: theta_e and er
+        """
+
+        ind = self.nearest_index(x,y)
+
+        k = self.ccurv[ind]
+        yaw = self.cyaw[ind]
+
+        rear_axle_vec_rot_90 = np.array([[math.cos(yaw + math.pi / 2.0)],
+                                         [math.sin(yaw + math.pi / 2.0)]])
+
+        vec_target_2_rear = np.array([[x - self.cx[ind]],
+                                      [y - self.cy[ind]]])
+
+        er = np.dot(vec_target_2_rear.T, rear_axle_vec_rot_90)
+        theta_e = mod2pi(yaw- self.cyaw[ind])
+
+        return theta_e, er, k, yaw, ind
+
+    def nearest_index(self, xx,yy):
+        """
+        find the index of the nearest point to current position.
+        :param node: current information
+        :return: nearest index
+        """
+
+        dx = [xx - x for x in self.cx]
+        dy = [yy - y for y in self.cy]
+        dist = np.hypot(dx, dy)
+        self.s0 += np.argmin(dist[self.s0:self.len])
+
+        return self.s0
+    
+    def pid_control(self,target_v, v, dist,dt):
+        """
+        PID controller and design speed profile.
+        :param target_v: target speed
+        :param v: current speed
+        :param dist: distance to end point
+        :return: acceleration
+        """
+        
+        
+        if dist < 10.0:
+            if v > 3.0:
+                a = -2.5
+            elif v < -2.0:
+                a = -1.0
+        else:
+            err = target_v - v
+            diff_v = err/dt
+            self.int_v += err*dt 
+            a = self.kp*err + self.ki*self.int_v + self.kd*diff_v
+            
+        return a
+
+def rear_wheel_feedback_control(x,y,v,yaw, ref_path):
+    """
+    rear wheel feedback controller
+    :param node: current information
+    :param ref_path: reference path: x, y, yaw, curvature
+    :return: optimal steering angle
+    """
+
+    theta_e, er, k, yaw, ind = ref_path.calc_theta_e_and_er(x,y,yaw)
+    
+
+    omega = v * k * math.cos(theta_e) / (1.0 - k * er) - \
+            C.K_theta * abs(v) * theta_e - C.K_e * v * math.sin(theta_e) * er / theta_e
+
+    delta = math.atan2(C.WB * omega, v)
+
+    return delta, ind
+
+
+
+
 from sklearn.cluster import DBSCAN
 
-class OccupancyGrid:
+class OccupancyGrid():
     """
     Siatka zajętości z KD-tree dla detekcji kolizji; aktualizowana z czujników ultradźwiękowych 
     """
@@ -150,12 +224,6 @@ class OccupancyGrid:
         self.yolo_y_pts = []
         self.ox = None
         self.oy = None
-
-        self.parking_mode = "SEARCH"     # SEARCH | LOCKED | PARKING
-        self.locked_slot = None
-        self.stable_counter = 0
-        self.N_STABLE = 5
-
 
     def setup_sensors(self,front_sensor_poses:dict,rear_sensor_poses:dict,ultrasonic_sensors:list,ultrasonic_sensors_apertures:dict,max_min_dict:dict):
 
@@ -224,11 +292,11 @@ class OccupancyGrid:
             # Obliczamy maksymalny promień przeszkody (połowa przekątnej)
             # Potrzebne do bezpiecznego wyszukiwania w KD-Tree
             self.max_obs_radius = max([np.hypot(o['length'], o['width'])/2 for o in obstacles])
-            #print(f"[OccupancyGrid] Ustawiono z {len(obstacles)} przeszkodami (obiektami).")
+            print(f"[OccupancyGrid] Ustawiono z {len(obstacles)} przeszkodami (obiektami).")
         else:
             self.kd_tree = None
             self.max_obs_radius = 0
-            #print("[OccupancyGrid] Brak przeszkód.")
+            print("[OccupancyGrid] Brak przeszkód.")
         
     
     def get_rect_corners(self, center, length, width, angle):
@@ -275,10 +343,10 @@ class OccupancyGrid:
         
         return not np.any(collision_free)
 
-    def is_collision(self, x, y, yaw) -> bool:
+    def is_collision(self, x, y, yaw,dist_map=None,map_info=None) -> bool:
+            
         if self.kd_tree is None:
             return False
-        assert len(self.obstacles) == self.kd_tree.data.shape[0]
         box_center_offset = (self.front_bumper_to_axle - self.rear_bumper_to_axle) / 2.0
         
         box_center_x = x + box_center_offset * np.cos(yaw)
@@ -308,6 +376,33 @@ class OccupancyGrid:
                 return True 
 
         return False  
+    
+    def convert_to_polar(self,x_t,y_t,sensor_pose):
+        x_s,y_s,theta_s = sensor_pose
+        r_t = np.hypot(x_t-x_s, y_t-y_s)
+        phi_t = np.arctan2(y_t-y_s, x_t-x_s)
+        phi_t = mod2pi(phi_t-theta_s)
+
+        return r_t,phi_t
+
+    def inverse_sensor_model(self,cell,dist,sensor_pose,params):
+        # zwróć evidence dla danej klatki 
+        print(sensor_pose)
+        beta = params["aperture"] # kąt rozwarcia
+        max_range = params["max_range"] 
+        
+        x_t,y_t = cell
+        r_t,phi_t = self.convert_to_polar(x_t,y_t,sensor_pose) # dla łatwości przekształcenie do biegunowego układu
+        alpha = 0.1
+        
+        if dist >= max_range or r_t > min(max_range,dist + alpha/2) or abs(phi_t) > beta/2:
+            return self.l_0
+        if dist < max_range and abs(r_t-dist) < alpha/2:
+            return self.l_occ
+        if r_t <= (dist - alpha/2):
+            return self.l_free
+        
+        return self.l_0
     
     def sensor_in_wrld(self,car_pose,sensor_pose):
         x_c,y_c,yaw_c = car_pose
@@ -600,7 +695,7 @@ class OccupancyGrid:
         
         if spot_type == 'parallel':
             required_len = 5.5
-            min_spot_depth = 1.9
+            min_spot_depth = 2.2
             orientation_offset = 0.0
         else: # perpendicular
             required_len = 2.4
@@ -646,14 +741,6 @@ class OccupancyGrid:
             # iterując po liście samochodów odnajdujemy luki między dwoma sąsiednimi
             obs1 = cars[i]
             obs2 = cars[i+1]
-
-            if 'ref_pose' not in obs1:
-                obs1['ref_pose'] = car_pose
-
-            car_x0, car_y0, car_yaw0 = obs1['ref_pose']
-            c0, s0 = np.cos(car_yaw0), np.sin(car_yaw0)
-            R0 = np.array([[c0, -s0], [s0, c0]])
-
             # tylko wystarczająco długie luki są akceptowane
             gap_start = obs1['max_x']
             gap_end = obs2['min_x']
@@ -684,15 +771,18 @@ class OccupancyGrid:
                 if obs_depth > current_depth + 1e-6:
                     current_depth = obs_depth
                     curb_detected = True
+                    
+            # jeśli jest tam przeszkoda, to współrzędna Y środka miejsca powinna być w odstępie od ref_line_y oraz w odstępie od current_depth
+            curb_margin = 0.5
             
-            usable_depth = ref_line_y + min_spot_depth / 2.0     
+            #uncorrected_center_y = side_sign * (ref_line_y + min_spot_depth/ 2.0)
             if curb_detected:
                 if (current_depth - ref_line_y) < min_spot_depth - 1e-6:
                     # za mało głębokości od linii referencyjnej do krawężnika
                     continue
-                usable_depth = usable_depth
+                usable_depth = current_depth - ref_line_y + C.CAR_WIDTH/2 - curb_margin
             else:
-                usable_depth = usable_depth
+                usable_depth = ref_line_y + min_spot_depth / 2.0     
             # Obliczenia liczby miejsc
             num_spots = int(gap_size // required_len)
             if num_spots <= 0:
@@ -710,9 +800,8 @@ class OccupancyGrid:
                 
                 spot_center_y = side_sign * usable_depth
                 vec_local = np.array([spot_x, spot_center_y])
-                #center_global = np.array([car_x, car_y]) + R.T @ vec_local
-                center_global = np.array([car_x0, car_y0]) + R0.T @ vec_local
-                final_angle = car_yaw + orientation_offset
+                center_global = np.array([car_x, car_y]) + R.T @ vec_local
+                final_angle = orientation_offset
                 slot_rect = self.get_rect_corners(
                     center=center_global,
                     length=required_len,
@@ -741,7 +830,7 @@ class OccupancyGrid:
                     continue
 
                 
-                offset = (self.front_bumper_to_axle-self.rear_bumper_to_axle)/2.00
+                offset = C.CAR_LENGTH/2 - 1.0 
                 target_x = center_global[0] - offset * np.cos(final_angle)
                 target_y = center_global[1] - offset * np.sin(final_angle)                
                 spots.append({
@@ -755,170 +844,8 @@ class OccupancyGrid:
                     'obs1': obs1['original'],
                     'obs2': obs2['original']
                 })
-            
-        if not hasattr(self, "locked_spots"):
-            self.locked_spots = []
-
-        NEW_SPOTS = []
-
-        for spot in spots:
-            matched = False
-            for locked in self.locked_spots:
-                if np.linalg.norm(locked['center'] - spot['center']) < 1.0:
-                    matched = True
-                    NEW_SPOTS.append(locked)
-                    break
-            if not matched:
-                NEW_SPOTS.append(spot)
-                self.locked_spots.append(spot)
-
-        return NEW_SPOTS
-
-        #return spots 
+        return spots 
     
-    def find_spots_new(self,car_pose,spot_type = "parallel", side = "right"):
-        # narożniki obszaru skanowania w układzie samochodu X do przodu Y w lewo 
-        # (górny lewy -> górny prawy -> dolny prawy -> dolny lewy)
-        # (-15,10) -> (15,10) -> (15,-10) -> (-15,-10)
-        # miejsce wolne to 
-        
-        side_sign = -1 if side == "right" else 1
-
-        if spot_type == "parallel":
-            MIN_SPOT_LENGTH = 5.5
-            orientation_offset = 0.0
-            MIN_SPOT_DEPTH = 2.4
-        else:  # perpendicular
-            MIN_SPOT_LENGTH = 2.4
-            orientation_offset = np.pi/2 if side == 'right' else -np.pi/2
-            MIN_SPOT_DEPTH = 5.3
-            
-        X_START, X_END = -10,10
-        P_NEAR = side_sign * (C.CAR_WIDTH / 2)
-        P_FAR  = side_sign * (C.CAR_WIDTH / 2 + MIN_SPOT_DEPTH)
-
-        obs = self.obstacles
-        car_x,car_y,car_yaw = car_pose
-
-        c, s = np.cos(car_yaw), np.sin(car_yaw)
-        R = np.array([[c, -s], [s, c]])
-        
-        all_obs = []
-        occupied = []
-        merged = []
-        for obs in self.obstacles:
-            l, w, ang = obs['length'], obs['width'], obs['angle']
-            corners_glob = self.get_rect_corners(obs['center'], l, w, ang)
-            corners_loc = (corners_glob - np.array([car_x, car_y])) @ R.T
-            min_x, max_x = np.min(corners_loc[:,0]), np.max(corners_loc[:,0])
-            min_y, max_y = np.min(corners_loc[:,1]), np.max(corners_loc[:,1])
-            obs_data = {
-                'min_x': min_x, 'max_x': max_x,
-                'min_y': min_y, 'max_y': max_y,
-                'avg_y': (min_y + max_y) / 2.0,
-                'is_car': bool(obs.get('is_car', False)),
-                'original': obs
-            }
-            all_obs.append(obs_data)
-
-            p_min = min(P_NEAR, P_FAR)
-            p_max = max(P_NEAR, P_FAR)
-
-            if max_y < p_min or min_y > p_max:
-                continue
-            x0 = max(min_x, X_START)
-            x1 = min(max_x, X_END)
-
-            if x1 > x0:
-                occupied.append((x0, x1))
-
-        occupied.sort()
-        merged = []
-
-        for x0, x1 in occupied:
-            if not merged or x0 > merged[-1][1]:
-                merged.append([x0, x1])
-            else:
-                merged[-1][1] = max(merged[-1][1], x1)
-        free_segments = []
-        prev = X_START
-
-        for x0, x1 in merged:
-            if x0 - prev >= MIN_SPOT_LENGTH:
-                free_segments.append((prev, x0))
-            prev = x1
-
-        if X_END - prev >= MIN_SPOT_LENGTH:
-            free_segments.append((prev, X_END))
-
-        def estimate_depth(seg_x0, seg_x1):
-            depth = None
-
-            for obs in all_obs:
-                if obs['max_x'] < seg_x0 or obs['min_x'] > seg_x1:
-                    continue
-                key = 'min_y' if side == "left" else 'max_y'
-                if obs[key]  < P_FAR :
-                    d = abs(obs[key])
-                    depth = d if depth is None else min(depth, d)
-
-            return depth
-        spots = []
-
-        curb_margin = 0.4
-        for x0, x1 in free_segments:
-            depth = estimate_depth(x0, x1)
-
-            num = int((x1 - x0) // MIN_SPOT_LENGTH)
-            step = (x1 - x0) / num
-
-            for i in range(num):
-                cx = x0 + step * (i + 0.5)
-                if depth is None:
-                    cy = side_sign * (C.CAR_WIDTH / 2 + MIN_SPOT_DEPTH / 2)
-                else:
-                    cy = side_sign * (C.CAR_WIDTH / 2 + depth / 2)
-                
-                vec_local = np.array([cx, cy])
-                center_global = np.array([car_x, car_y]) + R.T @ vec_local
-                final_angle = orientation_offset
-
-                offset = C.CAR_LENGTH/2 - 1.0 
-                target_x = center_global[0] - offset * np.cos(final_angle)
-                target_y = center_global[1] - offset * np.sin(final_angle)                
-                spots.append({
-                    'type': spot_type,
-                    'side': side,
-                    'center': center_global,
-                    'target_rear_axle': np.array([target_x, target_y]),
-                    'orientation': final_angle,
-                    'length': C.CAR_LENGTH,
-                    'width': C.CAR_WIDTH,      
-                })
-        return spots
-    
-    
-    def choose_spot(self,car_pose):
-        cx, cy, _ = car_pose
-
-        if not self.spots:
-            return None, None
-
-        best = min(
-            self.spots,
-            key=lambda sp: np.hypot(
-                sp['target_rear_axle'][0] - cx,
-                sp['target_rear_axle'][1] - cy
-            )
-        )
-
-        dist = np.hypot(
-            best['target_rear_axle'][0] - cx,
-            best['target_rear_axle'][1] - cy
-        )
-        return best,dist
-
-
     def match_semantics_with_sat(self):
         if len(self.yolo_points_buffer) < 5 or not self.obstacles:
             return
@@ -950,246 +877,19 @@ class OccupancyGrid:
 
 class Path:
     """Reprezentuje ścieżkę (wynik planowania)"""
-    def __init__(self, xs, ys, yaws, directions, curvs,costs):
+    def __init__(self, xs, ys, yaws, directions, costs=0.0):
         self.xs = xs       # Lista punktów
         self.ys = ys
         self.yaws = yaws
         self.costs = costs
-        def ch(d):
-            if d == "reverse":
-                d = -1
-            elif d == "forward":
-                d = 1
-            else: 
-                d = d 
-            return d
-        self.directions = [ch(d) for d in directions]
-        self.curvs = curvs 
-        self.ind_old = 0
-
-        self.int_v = 0.0
-        self.prev_err_v = 0.0
-        self.kp = 0.1
-        self.ki = 0.6
-        self.kd = 0.001
-        self.v_s = 0.0
-        self.s = self._build_len_s()
-        
-        self.last_ind = 0
-
-        self.K_theta = 2.0
-        self.K_e = 1.0
-        self.segments = []
-        start = 0
-
-        for i in range(1, len(self.directions)):
-            if self.directions[i] != self.directions[i-1]:
-                self.segments.append((start, i-1))
-                start = i
-
-        self.segments.append((start, len(self.directions)-1))
-        
+        self.directions = directions
+        #self.deltas = deltas
+    
     # Metody pomocnicze:
     def __len__(self):          # len(path)
         return len(self.xs)
     def get_point(self, idx):
         return (self.xs[idx], self.ys[idx], self.yaws[idx])
-    
-    # po to żeby śledzić odcinki długości   
-    def _build_len_s(self):
-        if len(self.xs) == 0:
-            return []
-        s = [0.0]
-        for i in range(1, len(self.xs)):
-            ds = np.hypot(self.xs[i]-self.xs[i-1], self.ys[i]-self.ys[i-1])
-            s.append(s[-1] + ds)
-        return s
-    
-    def calc_theta_e_and_er(self, x,y,yaw):
-        """
-        calc theta_e and er.
-        theta_e = theta_car - theta_path
-        er = lateral distance in frenet frame
-
-        :param node: current information of vehicle
-        :return: theta_e and er
-        """
-
-        #ind = self.nearest_index(x,y)
-        ind = self.nearest_index(x, y)
-        #ind += 5
-        k = self.curvs[ind]
-        path_yaw = self.yaws[ind]
-        if self.directions[ind] < 0:
-            path_yaw = mod2pi(path_yaw + np.pi)
-        rear_axle_vec_rot_90 = np.array([[math.cos(path_yaw + math.pi / 2.0)],
-                                         [math.sin(path_yaw + math.pi / 2.0)]])
-
-        vec_target_2_rear = np.array([[x - self.xs[ind]],
-                                      [y - self.ys[ind]]])
-
-        er = float(np.dot(vec_target_2_rear.T, rear_axle_vec_rot_90))
-        theta_e = mod2pi(yaw-path_yaw)
-
-        return theta_e, er, k, yaw, ind
-
-    def nearest_index(self, xx, yy, window=5):
-        start = self.last_ind
-        end = min(start + window, len(self.xs))
-        dx = np.array(self.xs[start:end]) - xx
-        dy = np.array(self.ys[start:end]) - yy
-        ind = start + int(np.argmin(np.hypot(dx, dy)))
-        self.last_ind = ind
-
-        return ind
-    
-    def pid_control(self,target_v, v,dt):
-        """
-        PID controller and design speed profile.
-        :param target_v: target speed
-        :param v: current speed
-        :param dist: distance to end point
-        :return: acceleration
-        """
-        err = target_v - v
-        diff_v = (err - self.prev_err_v) / dt
-        self.prev_err_v = err
-        self.int_v += err*dt 
-        diff_v = 0.0
-        self.v_s += self.kp*err + self.ki*self.int_v + self.kd*diff_v
-        self.v_s = np.clip(self.v_s,-target_v,target_v)
-        return self.v_s
-    
-    def rear_wheel_feedback_control(self,x,y,v,yaw): 
-        """
-        rear wheel feedback controller
-        :param node: current information
-        :param ref_path: reference path: x, y, yaw, curvature
-        :return: optimal steering angle
-        """
-
-        theta_e, er, k, yaw, ind = self.calc_theta_e_and_er(x,y,yaw)
-        
-        # if abs(theta_e) < 1e-3:
-        #     term_e = self.K_e * v * er
-        # else:
-        term_e = self.K_e * v * math.sin(theta_e) * er / theta_e
-        omega = v * k * math.cos(theta_e) / (1.0 - k * er) - \
-            self.K_theta * abs(v) * theta_e - term_e
-
-        delta = math.atan2(C.WHEELBASE * omega, abs(v) + 1e-6)
-        # if abs(v) < 1e-4:
-        #     delta = -delta
-        #print(f"theta_e: {theta_e}, er: {er}, k: {k}, yaw: {yaw}, delta: {delta}, ind: {ind}")
-        print(f"delta: {delta}, ind: {ind}, dir: {self.directions[ind]}")
-        return delta, ind
-
-def savitzky_golay_filt(x, window=11, poly=3):
-    try:
-        from scipy.signal import savgol_filter
-        # window musi być nieparzyste i <= len(x)
-        window = min(window, len(x) if len(x)%2==1 else len(x)-1)
-        window = max(window, poly+2 if (poly+2)%2==1 else poly+3)
-        if window >= len(x):
-            return x
-        return savgol_filter(x, window_length=window, polyorder=poly, mode='interp')
-    except Exception:
-        return x
-    
-def resample_and_smooth_path(path:Path, ds=0.005):
-    
-    xs = np.asarray(path.xs, dtype=float)
-    ys = np.asarray(path.ys, dtype=float)
-    dirs = np.asarray(path.directions, dtype=int)
-
-    if len(xs) < 3:
-        return path  # nie ma co robić
-
-    segs = path.segments
-
-    out_x, out_y, out_dir, out_seglen = [], [], [], []
-
-    for seg_i, (i0, i1) in enumerate(segs):
-        # wycinek segmentu
-        x_seg = xs[i0:i1+1]
-        y_seg = ys[i0:i1+1]
-        d_seg = dirs[i0:i1+1]
-        if len(x_seg) < 2:
-            continue
-
-        # lokalne s dla segmentu
-        ds_local = np.hypot(np.diff(x_seg), np.diff(y_seg))
-        s_local = np.concatenate([[0.0], np.cumsum(ds_local)])
-        s_end = s_local[-1]
-        if s_end < 1e-6:
-            continue
-
-        s_dense = np.arange(0.0, s_end + 1e-9, ds)
-
-        # interpolacja liniowa x(s), y(s) — wystarczy na demo i jest stabilna
-        x_dense = np.interp(s_dense, s_local, x_seg)
-        y_dense = np.interp(s_dense, s_local, y_seg)
-
-        # wygładzanie geometrii (x,y), a nie yaw
-        
-        x_dense = savitzky_golay_filt(x_dense, window=11, poly=3)
-        y_dense = savitzky_golay_filt(y_dense, window=11, poly=3)
-        
-        # kierunek stały w segmencie
-        dir_val = int(np.sign(d_seg[0])) if np.sign(d_seg[0]) != 0 else 1
-        dir_dense = np.full_like(x_dense, dir_val, dtype=int)
-
-        # "segment_length" jak w reeds-shepp: tu po prostu długość segmentu (z znakiem kierunku)
-        seglen_dense = np.full_like(x_dense, dir_val * s_end, dtype=float)
-
-        if seg_i > 0:
-            # usuń pierwszy punkt żeby nie dublować granicy
-            x_dense = x_dense[1:]
-            y_dense = y_dense[1:]
-            dir_dense = dir_dense[1:]
-            seglen_dense = seglen_dense[1:]
-
-        out_x.append(x_dense)
-        out_y.append(y_dense)
-        out_dir.append(dir_dense)
-        out_seglen.append(seglen_dense)
-
-    x_all = np.concatenate(out_x)
-    y_all = np.concatenate(out_y)
-    dir_all = np.concatenate(out_dir)
-    seglen_all = np.concatenate(out_seglen)
-
-    # --- policz yaw i kappa spójnie z geometrią (nieholonomiczne: yaw zgodny z tangentem ścieżki) ---
-    # pochodne po s (tu s jest "prawie" równomierne dzięki ds)
-    dx = np.gradient(x_all, ds)
-    dy = np.gradient(y_all, ds)
-    yaw = np.arctan2(dy, dx)
-
-    # unwrap yaw, policz pochodną, wrap z powrotem
-    yaw_u = np.unwrap(yaw)
-    dyaw_ds = np.gradient(yaw_u, ds)
-    kappa = dyaw_ds  # krzywizna ≈ d(yaw)/ds
-
-    yaw = np.array([mod2pi(a) for a in yaw_u], dtype=float)
-    yaw_corrected = yaw.copy()
-    for i in range(len(yaw_corrected)):
-        if dir_all[i] < 0:
-            yaw_corrected[i] = mod2pi(yaw_corrected[i] + np.pi)
-    yaw = yaw_corrected
-    kappa = savitzky_golay_filt(kappa, window=21, poly=3)
-        
-    # zbuduj nowy Path
-    new_path = Path(
-        xs=list(x_all),
-        ys=list(y_all),
-        yaws=list(yaw),
-        directions=list(dir_all),
-        curvs=list(kappa),
-        costs=path.costs
-    )
-    # jeśli chcesz też trzymać "segment length per point" jak RS:
-    new_path.seglen = list(seglen_all)
-    return new_path
 
 class Node:
     def __init__(self, cell: tuple, state: tuple, delta, direction: str, g_cost, h_cost, parent=None):
@@ -1210,7 +910,7 @@ class PriorityQueue:
     def push(self, node:Node):
         cell = node.cell
         existing:Node = self.nodes.get(cell)
-        if existing is None or node.g_cost < existing.g_cost - 1e-6:
+        if existing is None or node.g_cost < existing.g_cost:
             self.heap[cell] = node.f_cost
             self.nodes[cell] = node
 
@@ -1226,394 +926,8 @@ class PriorityQueue:
     
     def empty(self):
         return len(self.heap) == 0
+           
 
-
-class NewPlanner(QtCore.QObject):
-    expansionData = QtCore.pyqtSignal(object)
-    hmapData = QtCore.pyqtSignal(object)
-    def __init__(self,controller):
-        super().__init__()
-        self.goal_tolerance = 0.5
-        self.xy_resolution = C.XY_RESOLUTION
-        self.yaw_resolution = C.YAW_RESOLUTION  
-        self.expansion_counter = 0.0
-        self.step_size = 0.5
-        self.n_steers = 5
-        self.actions = self.calc_actions()
-        self.hmap = None
-        self.dist_map = None
-        self.controller = controller
-        self.expansionData.connect(self.controller.expansionUpdated)
-        self.hmapData.connect(self.controller.hmapUpdated)
-
-    def calc_actions(self):
-        motion_actions = []
-        steers = np.linspace(-C.MAX_WHEEL_ANGLE, C.MAX_WHEEL_ANGLE, self.n_steers,endpoint=True)
-        steers = np.unique(np.concatenate([steers, np.array([0.0])]))  
-        for delta in steers:
-            for direction in ["forward", "reverse"]:
-                motion_actions.append((delta, direction))
-        return motion_actions
-    
-    # def discretize_state(self,cur_node_state) -> tuple:
-    #     x, y, theta = cur_node_state
-    #     yaw_bins = int(round(2*np.pi / self.yaw_resolution))
-    #     yaw_i = int(round((theta % (2*np.pi)) / self.yaw_resolution)) % yaw_bins
-    #     return (
-    #         int(round(x / self.xy_resolution)),
-    #         int(round(y / self.xy_resolution)),
-    #         yaw_i
-    #     )
-    def discretize_state(self,cur_node_state,direction) -> tuple:
-        x, y, theta = cur_node_state
-        yaw_bins = int(round(2*np.pi / self.yaw_resolution))
-        yaw_i = int(round((theta % (2*np.pi)) / self.yaw_resolution)) % yaw_bins
-
-        return (int(round(x/self.xy_resolution)),
-                int(round(y/self.xy_resolution)),
-                yaw_i,
-                direction)
-    
-    def in_bounds(self,cell):
-        # hmap, minx, miny, xw, yw
-        mx = int(cell[0]) - self.map_offset_x
-        my = int(cell[1]) - self.map_offset_y
-        return 0 <= mx < self.hmap[0].shape[0] and 0 <= my < self.hmap[0].shape[1]
-
-    def calculate_unconstrained_heuristic(self, start_pose, goal_pose, grid: OccupancyGrid):
-        
-        obstacles = grid.obstacles 
-        
-        gx, gy, _ = goal_pose
-        sx, sy, _ = start_pose
-
-        all_x = [sx, gx]
-        all_y = [sy, gy]
-
-        collision_radius = 0.5
-        obs_polygons = []
-        for obs in obstacles:
-            corners = grid.get_rect_corners(obs['center'],obs['length']+ 2 * collision_radius,obs['width']+ 2 * collision_radius,obs['angle'])
-            obs_polygons.append(corners)
-            for p in corners:
-                all_x.append(p[0])
-                all_y.append(p[1])
-
-        
-        pad = 2
-        minx = int(np.floor((min(all_x) - pad )/ self.xy_resolution)) 
-        maxx = int(np.ceil((max(all_x) + pad )/ self.xy_resolution)) 
-        miny = int(np.floor((min(all_y) - pad )/ self.xy_resolution)) 
-        maxy = int(np.ceil((max(all_y) + pad )/ self.xy_resolution)) 
-
-        xw, yw = maxx - minx, maxy - miny
-        hmap = np.full((xw, yw), np.inf)
-        obs_map = np.zeros((xw, yw), dtype=bool)
-
-        grid_x, grid_y = np.meshgrid(np.arange(minx, maxx), np.arange(miny, maxy), indexing='ij')
-
-        world_grid_x = grid_x * self.xy_resolution
-        world_grid_y = grid_y * self.xy_resolution
-        
-        for obs in obstacles:
-            # Parametry przeszkody powiększonej o margines
-            l = obs['length'] + 2 * collision_radius
-            w = obs['width'] + 2 * collision_radius
-            cx, cy = obs['center']
-            ang = obs['angle']
-
-            dx = world_grid_x - cx
-            dy = world_grid_y - cy
-
-            c, s = np.cos(-ang), np.sin(-ang)
-            local_x = dx * c - dy * s
-            local_y = dx * s + dy * c
-            mask = (np.abs(local_x) <= l/2) & (np.abs(local_y) <= w/2)
-
-            obs_map[mask] = True
-        # dist_map = distance_transform_edt(~obs_map) * self.xy_resolution
-        # self.dist_map = dist_map
-        # potential_map = np.zeros_like(dist_map)
-
-        # potential_map = 1.0*np.exp(-1.0 * dist_map) 
-        
-        # cost_map = 1.0 + potential_map 
-        
-        goal_node_x = int(gx / self.xy_resolution) - minx
-        goal_node_y = int(gy / self.xy_resolution) - miny
-        
-        if not (0 <= goal_node_x < xw and 0 <= goal_node_y < yw):
-            print("[Heurystyka] Cel poza granicami mapy heurystycznej.")
-             
-        if obs_map[goal_node_x, goal_node_y]:
-            print("[Heurystyka] Cel jest wewnątrz przeszkody (po rozszerzeniu).")
-            
-
-        hmap[goal_node_x, goal_node_y] = 0.0
-        open_set = []
-        heapq.heappush(open_set, (0.0, goal_node_x, goal_node_y))
-        
-        motions = [
-            (1, 0, 1.0), (0, 1, 1.0), (-1, 0, 1.0), (0, -1, 1.0),
-            (1, 1, 1.414), (1, -1, 1.414), (-1, 1, 1.414), (-1, -1, 1.414)
-        ]
-        
-        while open_set:
-            cost, cx, cy = heapq.heappop(open_set)
-            
-            if cost > hmap[cx, cy]:
-                continue
-
-            for dx, dy, move_cost in motions:
-                nx, ny = cx + dx, cy + dy
-                
-                if 0 <= nx < xw and 0 <= ny < yw:
-                    if not obs_map[nx, ny]:
-
-                        new_cost = cost + move_cost
-                        if new_cost < hmap[nx, ny]:
-                            hmap[nx, ny] = new_cost
-                            heapq.heappush(open_set, (new_cost, nx, ny))
-        
-        #self.current_potential_map = potential_map
-        self.map_offset_x = minx
-        self.map_offset_y = miny               
-        return hmap, minx, miny, xw, yw
-    
-    def calculate_hybrid_heuristic(self,pose,goal_pose):
-        h_rs = reeds_shepp.path_length(pose, goal_pose, C.MAX_RADIUS) 
-        dist = np.hypot(goal_pose[0] - pose[0], goal_pose[1] - pose[1])
-        h_a_star = dist 
-        if self.hmap is not None:
-            h_map, minx, miny, xw, yw = self.hmap
-            pose_cell_x = int(round(pose[0]/self.xy_resolution)) - minx
-            pose_cell_y = int(round(pose[1]/self.xy_resolution)) - miny
-
-            if 0 <= pose_cell_x < xw and 0 <= pose_cell_y < yw:
-                v = h_map[pose_cell_x, pose_cell_y] * self.xy_resolution
-                if np.isfinite(v):
-                    h_a_star = v
-                else:
-                    h_a_star = dist
-        
-        return max(h_a_star,h_rs) 
-        
-    def simulate_motion(self, state, delta, direction):
-        x, y, theta = state
-        d = 1.0 if direction == "forward" else -1.0
-        theta_new = mod2pi(theta + np.tan(delta)/C.WHEELBASE * self.step_size)
-        theta = (theta + theta_new)/2.0
-        x_new = x + d * self.step_size * np.cos(theta)
-        y_new = y + d * self.step_size * np.sin(theta)
-        return (x_new, y_new, theta_new)
-    
-    def get_neighbours(self, node:Node, grid:OccupancyGrid):
-        neighbours = []
-        
-        actions = self.actions
-        for delta,direction in actions:
-            next_state = self.simulate_motion(
-                node.state,
-                delta,
-                direction 
-            )
-            if grid.is_collision(*next_state):
-                continue
-
-            cost = self.motion_cost(node, next_state, delta, direction)
-            neighbour = Node(
-                cell=self.discretize_state(next_state,direction),
-                state=next_state,
-                delta=delta,
-                direction=direction,
-                g_cost=node.g_cost + cost,
-                h_cost=0.0,  
-                parent=node
-            )
-            neighbours.append(neighbour)
-        
-        return neighbours   
-    
-    def motion_cost(self, node:Node, to_state, delta, direction):
-        dist = self.step_size
-        cost = dist
-        # dyaw = to_state[2] - node.state[2]
-        # cost = abs(C.MAX_RADIUS * dyaw) 
-        
-        cost *= C.FORWARD_COST if direction == "forward" else C.BACKWARD_COST
-        cost *= C.STEER_CHANGE_COST * abs(node.delta - delta) if abs(node.delta - delta) > 1e-2 else 1.0
-        cost *= C.STEER_ANGLE_COST * abs(delta) if delta != 0.0 else 1.0
-        cost *= C.GEAR_CHANGE_COST if node.direction != direction else 1.0
-        
-        return cost
-
-    def try_reeds_shepp(self,node:Node,goal_pose,grid:OccupancyGrid):
-        rs_path = reeds_shepp.path_sample(node.state,goal_pose,C.MAX_RADIUS,self.xy_resolution)
-        
-        if not rs_path:
-            return None,None
-        for i in range(0,len(rs_path),1): 
-            (rs_xs,rs_ys,rs_yaws,rs_deltas,rs_segment_lengths) = rs_path[i]
-            if grid.is_collision(rs_xs,rs_ys,rs_yaws):
-                return None,None
-        
-        path_cost = reeds_shepp.path_length(node.state,goal_pose,C.MAX_RADIUS)
-        goal_node = Node(
-            cell=self.discretize_state(goal_pose,node.direction),
-            state=goal_pose,
-            delta=0.0,
-            direction=node.direction,
-            g_cost=node.g_cost + path_cost,
-            h_cost=0.0,
-            parent=node
-        )   
-        return rs_path,goal_node
-        
-    def reconstruct_path(self,rs_path,goal_node:Node):
-        path_xs = []
-        path_ys = []
-        path_yaws = []
-        #deltas = []
-        dirs = []
-        costs = []
-        curvs = []
-        seg_lengths_at_points = []
-
-        curr = goal_node.parent
-        while curr is not None:
-            path_xs.append(curr.state[0])
-            path_ys.append(curr.state[1])
-            path_yaws.append(curr.state[2])
-            dirs.append(curr.direction)
-            costs.append(curr.g_cost)
-            #deltas.append(curr.delta)
-            curvs.append(np.tan(curr.delta)/C.WHEELBASE)
-            curr = curr.parent
-
-        path_xs = path_xs[::-1]
-        path_ys = path_ys[::-1]
-        path_yaws = path_yaws[::-1]
-        dirs = dirs[::-1]
-        costs = costs[::-1]
-        #deltas = deltas[::-1]
-
-        # jeśli rs_path zaczyna się od punktu, który jest prawie tym samym co ostatni z drzewa,
-        # to pomiń pierwszy punkt rs_path żeby nie robiło kreski tam siam
-        last = np.array([path_xs[-1], path_ys[-1], path_yaws[-1]])
-        first = np.array([rs_path[0][0], rs_path[0][1], rs_path[0][2]])
-        if np.linalg.norm(last[:2] - first[:2]) < 1e-3:
-            rs_iter = rs_path[1:]
-        else:
-            rs_iter = rs_path
-
-        for pt in rs_iter:
-            path_xs.append(pt[0])
-            path_ys.append(pt[1])
-            path_yaws.append(pt[2])
-            dirs.append(np.sign(pt[4]))
-            curvs.append(pt[3])
-            costs.append(costs[-1] if costs else 0.0)
-        
-        return Path(path_xs, path_ys, path_yaws, dirs, curvs,costs)
-    
-    def should_try_rs(self, node, goal):
-        d = np.hypot(node.state[0]-goal[0], node.state[1]-goal[1])
-        if d < 5.0:   return (self.expansion_counter % 5) == 0
-        if d < 15.0:  return (self.expansion_counter % 10) == 0
-        return (self.expansion_counter % 20) == 0
-    def is_goal(self, pose, goal_pose):
-        dx = pose[0] - goal_pose[0]
-        dy = pose[1] - goal_pose[1]
-        d = np.hypot(dx, dy)
-        dyaw = abs(mod2pi(pose[2] - goal_pose[2]))
-        return (d <= self.goal_tolerance) and (dyaw <= self.yaw_resolution)
-    def hybrid_a_star_planning(self,start_pose,goal_pose,grid:OccupancyGrid):
-        
-        print("[Planner] Zaczęto planowanie")
-        open_set = PriorityQueue()
-        closed_set = {}
-
-        self.hmap = self.calculate_unconstrained_heuristic(start_pose,goal_pose,grid)
-        #self.hmapData.emit(self.hmap)
-
-        # dx = goal_pose[0] - start_pose[0]
-        # dy = goal_pose[1] - start_pose[1]
-        # angle_to_goal = np.arctan2(dy, dx)
-        # angle_diff = abs(mod2pi(angle_to_goal - start_pose[2]))
-        init_dir = "forward" # if angle_diff < np.pi/2 else "reverse"
-
-        start_node = Node(
-            cell = self.discretize_state(start_pose,init_dir),
-            state=start_pose,
-            delta = 0.0,
-            direction=init_dir,
-            g_cost=0.0,
-            h_cost = self.calculate_hybrid_heuristic(start_pose,goal_pose)
-        )
-        open_set.push(start_node)
-
-        while not open_set.empty():
-            if self.controller.state != "planning":
-                break
-            self.expansion_counter += 1
-            
-            current_node = open_set.pop() 
-            current_cell = current_node.cell
-            #if not self.in_bounds(current_cell): continue
-            
-            if current_cell in closed_set:
-                if closed_set[current_cell] <= current_node.g_cost:
-                    continue # już byliśmy tu
-            closed_set[current_cell] = current_node.g_cost
-            #closed_set[current_cell] = True
-
-            if self.should_try_rs(current_node,goal_pose):
-                rs_path, possible_goal_node = self.try_reeds_shepp(current_node, goal_pose, grid)
-                if rs_path is not None and possible_goal_node is not None:
-                    print(f"[Planner] Znaleziono optymalną trasę! Koszt: {possible_goal_node.g_cost:.2f}")
-                    return self.reconstruct_path(rs_path, possible_goal_node)
-                
-            # if self.is_goal(current_node.state, goal_pose):
-            #     goal_node = Node(
-            #         cell=current_node.cell,
-            #         state=goal_pose,
-            #         delta=current_node.delta,
-            #         direction=current_node.direction,
-            #         g_cost=current_node.g_cost,
-            #         h_cost=0.0,
-            #         parent=current_node
-            #     )
-            #     return self.reconstruct_path([], start_node, goal_node)
-            
-                
-            neighbours = self.get_neighbours(current_node,grid)
-            
-            for neighbour in neighbours:
-                neighbour_cell = neighbour.cell
-                same_cell = (neighbour_cell == current_cell)
-                #if same_cell: continue
-                if (neighbour_cell in closed_set) and (closed_set[neighbour_cell] <= neighbour.g_cost) and (not same_cell):
-                    continue
-                existing = open_set.get_node(neighbour_cell) if open_set.contains(neighbour_cell) else None
-                better_path = (existing is None) or (neighbour.g_cost < existing.g_cost - 1e-6) or same_cell
-                if not better_path:
-                    continue
-                neighbour.h_cost = self.calculate_hybrid_heuristic(neighbour.state,goal_pose)
-                neighbour.f_cost = neighbour.g_cost + neighbour.h_cost
-                if same_cell:
-                    if neighbour.f_cost > current_node.f_cost + 1e-2: # tie breaker
-                        continue
-                    neighbour.parent = current_node.parent
-                #elif same_cell and neighbour.f_cost <= current_node.f_cost + 1e-2:
-                open_set.push(neighbour)
-                
-            
-            #self.expansionData.emit(current_node.state)
-            print(f"[Planner] h_cost:{current_node.h_cost}, g_cost:{current_node.g_cost}, f_cost:{current_node.f_cost}")
-            
-        return None
-               
-"""
 class NewPlanner(QtCore.QObject):
     expansionData = QtCore.pyqtSignal(object)
     hmapData = QtCore.pyqtSignal(object)
@@ -1982,7 +1296,7 @@ class NewPlanner(QtCore.QObject):
             print(f"[Planner] h_cost:{current_node.h_cost}, g_cost:{current_node.g_cost}, f_cost:{current_node.f_cost}")
             
         return None
-"""    
+    
 class PlanningWorker(QtCore.QObject):
 
     stateData = QtCore.pyqtSignal(str)
@@ -1993,32 +1307,31 @@ class PlanningWorker(QtCore.QObject):
         super().__init__() 
         self.controller = controller
         self.grid = grid
+        #self.stateData.connect(self.controller.stateUpdated)
         self.pathData.connect(self.controller.pathUpdated)
         
     @QtCore.pyqtSlot()
     def run(self):
-        if self.controller.planning_active:
-            
-            print("[PlannerWorker] Zaczynam planowanie ścieżki. Proszę czekać...")
+        if self.controller.state == "waiting_for_planning":
+            print("[PlannerWorker] Zaczynam planowanie ścieżki...")
             grid = self.grid
             start = self.controller.start_pose
             goal = self.controller.goal_pose
-            print("planner obstacles:", len(grid.obstacles))
+
             planner = NewPlanner(self.controller)
             path = None
             try:
                 path = planner.hybrid_a_star_planning(start,goal,grid)
             except Exception: 
-                print(f"[PlanningWorker] Błąd w planowaniu!")
+                print(F"[PlanningWorker] Błąd w planowaniu!")
                 traceback.print_exc()
             if path is not None:
-                path = resample_and_smooth_path(path)
-                print(f"[PlannerWorker] Segmenty ścieżki: {path.segments}")
-                self.controller.path = path
                 self.pathData.emit(path)
+                self.controller.state = "finished_planning"
                 print("[PlannerWorker] Znaleziono ścieżkę.")
                 self.finished.emit(True)
             else:
+                self.controller.state = "searching"
                 print("[PlannerWorker] Nie znaleziono ścieżki.")
                 self.finished.emit(False)
         else:

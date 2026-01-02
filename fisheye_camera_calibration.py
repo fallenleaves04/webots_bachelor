@@ -226,7 +226,7 @@ def detect_apriltags(image,name):
     gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
     
     # 2. Wybór słownika (Musi pasować do tego w Webots!)
-    dictionary = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_APRILTAG_25h9)
+    dictionary = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_APRILTAG_36h11)
     parameters = cv.aruco.DetectorParameters()
     
     # Opcjonalnie: poprawa detekcji małych tagów
@@ -260,10 +260,10 @@ def estimate_tag_pose(corners, ids, K, D, tag_size_meters):
     
     half_size = tag_size_meters / 2.0
     obj_points = np.array([
-    [ half_size,  half_size, 0], # 0: Top-Left  
-    [ half_size, -half_size, 0], # 1: Top-Right 
-    [ -half_size, -half_size, 0], # 2: Bottom-Right
-    [ -half_size,  half_size, 0]  # 3: Bottom-Left 
+    [ -half_size,  -half_size, 0], # 0: Top-Left  
+    [ -half_size, half_size, 0], # 1: Top-Right 
+    [ half_size, half_size, 0], # 2: Bottom-Right
+    [ half_size,  -half_size, 0]  # 3: Bottom-Left 
     ], dtype=np.float32)
 
     poses = {}
