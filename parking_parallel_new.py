@@ -5,14 +5,14 @@ from vehicle import Car
 import sys
 import visualise as vis
 from camera_calibration import save_homo
-from park_algo import TrajStateMachine,Kalman,OccupancyGrid,wrap_angle,mod2pi,C,PlanningWorker,Path
-from fisheye_camera_calibration import estimate_tag_pose,detect_apriltags
+from park_algo import TrajStateMachine,Kalman,OccupancyGrid,mod2pi,C,PlanningWorker,Path
+#from fisheye_camera_calibration import estimate_tag_pose,detect_apriltags
 import stereo_yolo as sy
 from ultralytics import YOLO
 import pandas as pd
 import os
 import time
-from copy import deepcopy
+
 sys.path.append(r"D:\\User Files\\BACHELOR DIPLOMA\\Kod z Github (rozne algorytmy)")
 
 #from PIL import Image
@@ -102,12 +102,12 @@ def set_speed(kmh,driver):
     print(f"Ustawiono prędkość {speed} km/h")
 
 def set_steering_angle(wheel_angle,driver):
-    global steering_angle
-    # Clamp steering angle to [-0.5, 0.5] radians (per vehicle constraints)
+    global steering_angle,manual_steering
     wheel_angle = max(min(wheel_angle, C.MAX_WHEEL_ANGLE), -C.MAX_WHEEL_ANGLE)
     steering_angle = wheel_angle
     driver.setSteeringAngle(steering_angle)
-    print(f"Skręcam {steering_angle} rad")
+    manual_steering = steering_angle / 0.02 
+    #print(f"Skręcam {steering_angle} rad")
 
 def change_manual_steering_angle(inc,driver):
     global manual_steering
@@ -186,7 +186,9 @@ class VisController(vis.QtCore.QObject):
     expansionUpdated = vis.QtCore.pyqtSignal(object)
     hmapUpdated = vis.QtCore.pyqtSignal(object)
     pathCarUpdated = vis.QtCore.pyqtSignal(object) # dla aktualizacji względem ścieżki
-    
+    funcCarUpdated = vis.QtCore.pyqtSignal(object) # dla wykresów yaw, kappa i delta - weryfikacja ścieżki
+    segmentProgressUpdated = vis.QtCore.pyqtSignal(object) # dla strzałki na wizualizacji, progres segmentu
+
     def __init__(self):
         super().__init__()
         self.parking = False
@@ -196,14 +198,20 @@ class VisController(vis.QtCore.QObject):
         self.planning_active = False  
         self.stopped = False
         self.path : Path = None
-        self.timer = 0.0
+        self.timer = 0.
+        
+        self.side = "right"
+        self.find_type = "parallel"
+
+        self.finish_timer = 0.0
+        self.parking_finished = False
 
     @vis.QtCore.pyqtSlot()
     def toggle_parking(self):
         self.parking = not self.parking
         self.timer = 0.0
         if self.state == "inactive":
-            self.state = "searching"
+            self.state = "inactive_waiting"
         else:
             self.planning_active = False
             self.stopped = False
@@ -211,6 +219,7 @@ class VisController(vis.QtCore.QObject):
             self.pathUpdated.emit(Path([], [], [], [], [], []))
             self.state = "inactive"
         self.parkingToggled.emit(self.parking)
+        self.stateUpdated.emit(self.state)
    
 
 # IMPLEMENTACJA MAIN ALE W QTHREAD, ŻEBY ZROBIĆ WIZUALIZACJĘ DOBRĄ ; CAŁE RUN MOŻNA PRZENIEŚĆ DO DEF MAIN(), JEŻELI QT NIEPOTRZEBNE
@@ -218,6 +227,8 @@ class VisController(vis.QtCore.QObject):
 
 class MainWorker(vis.QtCore.QObject):
     
+    global manual_steering
+
     sensorData  = vis.QtCore.pyqtSignal(object) # dane z czujników ultradźwiękowych
     poseData    = vis.QtCore.pyqtSignal(object) # pomiary z Webots
     trajData    = vis.QtCore.pyqtSignal(object) # trajektoria dla rysowania plus przeszkody i miejsca
@@ -226,10 +237,12 @@ class MainWorker(vis.QtCore.QObject):
     angleData   = vis.QtCore.pyqtSignal(object) # wykresy skrętu i odchylenia
     stateData   = vis.QtCore.pyqtSignal(str)    # stan parkowania - poszukiwanie, planowanie, wykonywanie
     pathCarData = vis.QtCore.pyqtSignal(object) # dla przesyłania bieżącego śledzonego punktu trajektorii
+    funcCarData = vis.QtCore.pyqtSignal(object) # dla przesyłania yaw, kappa, delta - wykresy weryfikacji ścieżki
+    segmentProgressData = vis.QtCore.pyqtSignal(object) # dla przesyłania progresu przejazdu segmentu ścieżki
     finished    = vis.QtCore.pyqtSignal(bool)   # ukończenie życia wątku
     
 
-    def __init__(self,supervisor,controller:VisController):
+    def __init__(self,supervisor,controller:VisController,main_window:vis.MainWindow):
         super().__init__()
         self.controller = controller
         
@@ -249,6 +262,8 @@ class MainWorker(vis.QtCore.QObject):
         self.writeParkingPose = False
         self.planning_thread = None
 
+        self.main_window = main_window
+        
     def _load_or_save_pose(self, name, Tp_s, target_dict):
         path = f"sensor_poses/{name}.npy"
         if not os.path.exists(path):
@@ -308,9 +323,6 @@ class MainWorker(vis.QtCore.QObject):
                         
 
     def start_planning_thread(self,ogm):
-        # if self.planning_thread is not None and self.planning_thread.isRunning():
-        #     print("[MainWorker] Wątek planowania już istnieje.")
-        #     return
         
         print("[MainWorker] Uruchamiam wątek planowania")
         self.planning_worker = PlanningWorker(self.controller,ogm)
@@ -325,15 +337,19 @@ class MainWorker(vis.QtCore.QObject):
         self.planning_worker.finished.connect(self.planning_finished) 
 
         self.planning_thread.start()
-        
+
+    def set_state(self, new_state):
+        self.controller.state = new_state
+        self.stateData.emit(new_state)
+        #print(f"[MainWorker] Zmieniony stan kontrolera: {new_state}")
+            
     @vis.QtCore.pyqtSlot(bool)
     def planning_finished(self,success):
         self.controller.planning_active = False
         if success:
-            self.controller.state = "executing"
-            #self.planned_path = self.pathData or Path([],[],[],[],[])
+            self.set_state("executing")
         else:
-            self.controller.state = "searching"
+            self.set_state("searching")
             
 
     @vis.QtCore.pyqtSlot()
@@ -468,25 +484,21 @@ class MainWorker(vis.QtCore.QObject):
                 #     driver.setBrakeIntensity(1.0)
 
 
-            elif key == Keyboard.RIGHT:
-                change_manual_steering_angle(+5,driver)
+            if key == Keyboard.RIGHT:
+                change_manual_steering_angle(+2.0,driver)
             elif key == Keyboard.LEFT:
-                change_manual_steering_angle(-5,driver)
-            elif key in (ord('p'),ord('P')):
-
-                cont.toggle_parking()
-                if cont.parking:
-
-                    print("Rozpoczęto parking")
-                else:
-                    cv2.destroyAllWindows()
-                    print("Ukończono parking")
-                
-            elif key in (ord('e'),ord('E')):
-                
-                if cont.parking and self.controller.state == "waiting_for_confirm_start" and self.controller.stopped:
-                    self.controller.timer = 0.0
-                    self.controller.state = "planning"
+                change_manual_steering_angle(-2.0,driver)
+            # elif key in (ord('p'),ord('P')):
+            #     cont.toggle_parking()
+            #     if cont.parking:
+            #         print("[MainWorker] Rozpoczęto parking")
+            #     else:
+            #         cv2.destroyAllWindows()
+            #         print("[MainWorker] Ukończono parking")
+            # elif key in (ord('e'),ord('E')):
+            #     if cont.parking and self.controller.state == "waiting_for_confirm_start" and self.controller.stopped:
+            #         self.controller.timer = 0.0
+            #         self.controller.state = "planning"
             # elif key in (ord('F'),ord('f')):
             #     driver.setGear(1)
             #     print("Napęd do przodu")
@@ -494,8 +506,8 @@ class MainWorker(vis.QtCore.QObject):
             #     driver.setGear(-1)
             #     print("Napęd do tyłu")
             #else:
-            #driver.setThrottle(0.0)
-            #driver.setBrakeIntensity(0.0)
+            #     driver.setThrottle(0.0)
+            #     driver.setBrakeIntensity(0.0)
             
             elif not cont.parking:
                 self.controller.state == "inactive"
@@ -587,26 +599,40 @@ class MainWorker(vis.QtCore.QObject):
             ])
         
         def get_pose_kalman(dt,kalman):
-            
-            nonlocal yaw_est,x_odo,y_odo,sp_odo,delta,yaw_real,gp0,im0,node_pos0,enc0
+            nonlocal psi,x_odo,y_odo,gp0,im0,node_pos0,yaw_est
             if self.first_call_pose:
                 x_odo = 0.0
                 y_odo = 0.0
+                psi = 0.0
                 gp0 = gps.getValues()
                 im0 = imu.getRollPitchYaw()
+                raw_enc = [driver.getWheelEncoder(i) for i in range(4)]
                 for i in range(4):
-                    enc0[i] = driver.getWheelEncoder(i)
-                    prev_enc[i] = 0.0
+                    enc0[i] = raw_enc[i]
+                    prev_enc[i] = raw_enc[i]
                 node_pos0 = self.node.getPosition()
                 
                 self.first_call_pose = False
-                yaw_real = 0.0
+                return {
+                    "sp_odo": 0.0,
+                    "im": [0.0, 0.0, 0.0],
+                    "delta": 0.0,
+                    "psi": 0.0,
+                    "dt": dt,
+                    "x_odo": 0.0,
+                    "y_odo": 0.0,
+                    "encoders": [0.0]*4,
+                    "node_pos": [0.0, 0.0, 0.0],
+                    "acc": [0.0, 0.0, 0.0],
+                    "node_vel": [0.0, 0.0, 0.0],
+                    "node_vel_x": 0.0
+                }
             # gps
             node_pos = self.node.getPosition()
             node_vel = self.node.getVelocity()
             # imu
             rpy = imu.getRollPitchYaw()
-            yaw_imu = wrap_angle(rpy[2] - im0[2])
+            yaw_imu = mod2pi(rpy[2] - im0[2])
             im = [rpy[0] - im0[0], rpy[1] - im0[1], yaw_imu]
             # supervisor
             R = R_xyz(rpy[2], rpy[1], rpy[0])   # ZYX
@@ -614,24 +640,30 @@ class MainWorker(vis.QtCore.QObject):
             node_vel_x = node_vel_xyz[0]  
             # żyroskop
             gyr = gyro.getValues()
-            yaw_est = wrap_angle(yaw_est + gyr[2] * dt)
+            dpsi_gyr = gyr[2] * dt
+            yaw_est = mod2pi(yaw_est + dpsi_gyr)
             # odometria
             sp_odo_meas,encoders = get_speed_odo(dt)
             # kąt skrętu kół [rad]
             delta_meas = -driver.getSteeringAngle()
-            x_pred = kalman.predict(np.array([x_odo,y_odo,yaw_real,sp_odo_meas,delta_meas]),dt)
+            old_yaw = psi
+            x_pred = kalman.predict(np.array([x_odo,y_odo,psi,sp_odo_meas,delta_meas]),dt)
             x_upd = kalman.update(x_pred,np.array([yaw_est]))
             x_odo = x_upd[0]
             y_odo = x_upd[1]
-            yaw_real = x_upd[2]
+            psi = x_upd[2]
             sp_odo = x_upd[3]
             delta = x_upd[4]
+            new_yaw = psi
+            yaw_rate = (new_yaw - old_yaw) / dt
             # akcelerometr
             accer = acc.getValues()
             # node position
             x_node,y_node = webots_to_odom_xy(node_pos[0] - node_pos0[0],node_pos[1] - node_pos0[1],im0[2])
             node_pos = [x_node,y_node,node_pos[2] - node_pos0[2]]
-            return {"sp_odo":sp_odo,"im":im,"delta":delta,"psi":yaw_real,"dt":dt,"x_odo":x_odo,"y_odo":y_odo,"encoders":encoders,"node_pos":node_pos,"acc":accer,"node_vel":node_vel_xyz,"node_vel_x":node_vel_x}
+            return {"sp_odo":sp_odo,"im":im,"delta":delta,"psi":psi,"yaw_rate":yaw_rate,"dt":dt,"x_odo":x_odo,
+                    "y_odo":y_odo,"encoders":encoders,"node_pos":node_pos,"acc":accer,
+                    "node_vel":node_vel_xyz,"node_vel_x":node_vel_x}
 
         R0 = np.eye(3)
         def dxdys(state,v,delta):
@@ -713,29 +745,27 @@ class MainWorker(vis.QtCore.QObject):
             dpsi_odo = (sp_odo * np.tan(delta) / wheelbase) * dt
             # akcelerometr
             accer = acc.getValues()
-            # mid_psi = psi + dpsi_odo/2
-            # # mid_psi = psi + dpsi_odo
-            # mid_psi = mod2pi(mid_psi)
-            # x_odo += sp_odo * dt * np.cos(mid_psi)
-            # y_odo += sp_odo * dt * np.sin(mid_psi)
-           
-            # psi += dpsi_odo
-            # yaw_real = mod2pi(psi)
-            # yaw_real = psi
-
-            # komplelentarny filtr żyroskopu i odometrii
-            alpha = 0.7
             
-            old_x,old_y,old_yaw = x_odo,y_odo,psi
-            new_x,new_y,new_yaw = runge_kutta_odo(old_x,old_y,old_yaw,sp_odo,delta,dt)
-            x_odo,y_odo,psi_odo = new_x,new_y,new_yaw
-            psi = wrap_angle(alpha * psi_odo + (1-alpha)*(old_yaw + dpsi_gyr))
-            yaw_real = psi
+            old_yaw = psi
+            x_odo += sp_odo * dt * np.cos(psi)
+            y_odo += sp_odo * dt * np.sin(psi)
+            psi += dpsi_odo
+            psi = mod2pi(psi)
+            new_yaw = psi
+            
+            # old_x,old_y,old_yaw = x_odo,y_odo,psi
+            # new_x,new_y,new_yaw = runge_kutta_odo(old_x,old_y,old_yaw,sp_odo,delta,dt)
+            # x_odo,y_odo,psi = new_x,new_y,new_yaw
+            yaw_rate = (new_yaw - old_yaw) / dt
+            # psi = wrap_angle(alpha * psi_odo + (1-alpha)*(old_yaw + dpsi_gyr))
             # supervisor
             x_node,y_node = webots_to_odom_xy(node_pos[0] - node_pos0[0],node_pos[1] - node_pos0[1],im0[2])
             node_pos = [x_node,y_node,node_pos[2] - node_pos0[2]]
 
-            return {"sp_odo":sp_odo,"im":im,"delta":delta,"psi":yaw_real,"dt":dt,"x_odo":x_odo,
+            # yaw-rate dla obliczenia krzywizny
+            
+
+            return {"sp_odo":sp_odo,"im":im,"delta":delta,"psi":psi,"yaw_rate":yaw_rate,"dt":dt,"x_odo":x_odo,
                     "y_odo":y_odo,"encoders":encoders,"node_pos":node_pos,"acc":accer,
                     "node_vel":node_vel_xyz,"node_vel_x":node_vel_x}
 
@@ -814,29 +844,49 @@ class MainWorker(vis.QtCore.QObject):
         ref_path = None
         self.path_index = int(0.0)
         delta_prev = 0.0
+
+        old_type = None
+        
+        # dla ścieżki
+        
+
         while robot.step(64) != -1:
             check_keyboard(cont)
-            #print(self.controller.state)
             vis.QtCore.QCoreApplication.processEvents()
-            now = driver.getTime()
+
             now_real = time.time()
             dt_real = now_real - prev_real
+            prev_real = now_real
             
             now = driver.getTime()
             dt_sim = now - prev_time
-            pose_measurements = get_pose(dt_sim)
-            prev_real = now
             prev_time = now
+
+            pose_measurements = get_pose(dt_sim)
+            
             names_images = dict(zip(camera_names, [get_camera_image(c) for c in cameras]))
             image = names_images[name].copy()
             
+
+            front_dists = [process_distance_sensors(s) for s in front_sensors]
+            rear_dists = [process_distance_sensors(s) for s in rear_sensors]
+            right_side_dists = [process_distance_sensors(s) for s in right_side_sensors]
+            left_side_dists = [process_distance_sensors(s) for s in left_side_sensors]
+
+            front_names_dists = dict(zip(front_sensor_names, front_dists))
+            rear_names_dists = dict(zip(rear_sensor_names, rear_dists))
+            left_side_names_dists = dict(zip(left_side_sensor_names, left_side_dists))
+            right_side_names_dists = dict(zip(right_side_sensor_names, right_side_dists))
+            
+            self.sensorData.emit([front_names_dists,rear_names_dists,
+                                  left_side_names_dists,right_side_names_dists,
+                                  max_min_dict])
+            
             if cont.parking:
-                
-                #tsm.update(now_real,dt_sim)
-                
                 x_odo = pose_measurements["x_odo"]
                 y_odo = pose_measurements["y_odo"]
                 yaw_odo = pose_measurements["psi"]
+                yaw_rate = pose_measurements.get("yaw_rate", 0.0)
                 delta_meas = pose_measurements["delta"]
                 sp_odo = pose_measurements["sp_odo"]
                 node_vel_x = pose_measurements["node_vel_x"]
@@ -845,82 +895,19 @@ class MainWorker(vis.QtCore.QObject):
                 
                 
 
-                if self.writeParkingPose:
-                    self.writeParkingPose = not self.writeParkingPose
-                    #park_poses.update({"x_odo":x_odo,"y_odo":y_odo,"node_pos_x":node_pos[0],"node_pos_y":node_pos[1],"psi_odo":yaw_odo,"psi_webots":yaw_webots})
-                    #print("Zapisano miejsce parkingowe")
-                
-                front_dists = [process_distance_sensors(s) for s in front_sensors]
-                rear_dists = [process_distance_sensors(s) for s in rear_sensors]
-                right_side_dists = [process_distance_sensors(s) for s in right_side_sensors]
-                left_side_dists = [process_distance_sensors(s) for s in left_side_sensors]
-
-                front_names_dists = dict(zip(front_sensor_names, front_dists))
-                rear_names_dists = dict(zip(rear_sensor_names, rear_dists))
-                left_side_names_dists = dict(zip(left_side_sensor_names, left_side_dists))
-                right_side_names_dists = dict(zip(right_side_sensor_names, right_side_dists))
-                # if not path_built:
-                #     point1 = (x_odo,y_odo,yaw_odo)
-                #     point2 = (10.0,30.0,np.pi/2)
-                #     path_xs = []
-                #     path_ys = []
-                #     path_yaws = []
-                #     path_dirs = []
-                #     path_curvs = []
-                #     path = reeds_shepp.path_sample(point1,point2,C.MAX_RADIUS,0.05)
-                #     for p in path:
-                #         path_xs.append(p[0])
-                #         path_ys.append(p[1])
-                #         path_yaws.append(p[2])
-                #         path_dirs.append(np.sign(p[4]))
-                #         path_curvs.append(-p[3])
-                #     ref_path = Path(path_xs,path_ys,path_yaws,path_dirs,path_curvs,[])
-                #     self.pathData.emit(ref_path)
-                #     path_built = True
-
-
-                # if ref_path is not None and path_built:
-                #     x = x_odo
-                #     y = y_odo
-                #     yaw = yaw_odo
-                #     v = sp_odo
-                    
-                #     dir_ref = ref_path.directions[self.path_index]   
-                #     v_eff = dir_ref * abs(v)
-
-                #     delta,ind = ref_path.rear_wheel_feedback_control(x,y,v_eff,yaw)
-                #     self.path_index = ind
-                #     delta = delta
-                #     #print(f"delta: {delta}, ind: {ind}")
-                    
-                #     dist_to_goal = ref_path.s[-1] - ref_path.s[ind]
-                #     target_v = dir_ref * C.MAX_SPEED
-                #     if ind > 0 and ref_path.directions[ind] != ref_path.directions[ind-1]:
-                #         target_v = 0.0
-                #     if dist_to_goal <= 3.0:
-                #         target_v = 0.0
-                #     v_set = ref_path.pid_control(target_v,v,dt_sim)
-                    
-                #     tracked_pose = (ref_path.xs[ind],ref_path.ys[ind],ref_path.yaws[ind])
-                #     self.pathCarData.emit(tracked_pose)
-                #     max_rate = 0.5
-                #     delta_cmd = np.clip(delta, delta_prev - max_rate*dt_sim, delta_prev + max_rate*dt_sim)
-                #     delta_prev = delta_cmd
-                #     #delta_cmd = max(-C.MAX_WHEEL_ANGLE, min(C.MAX_WHEEL_ANGLE, delta))
-                #     driver.setSteeringAngle(min(max(-C.MAX_WHEEL_ANGLE,delta_cmd),C.MAX_WHEEL_ANGLE))     
-                    
-                
-
-                if not (self.controller.planning_active or self.controller.state == "executing"):
-                    
-                    
-                    #if self.controller.state not in ["planning","executing"]:
+                if not (self.controller.planning_active or self.controller.state in ["executing","drive_forward","drive_backward","parking_finished"]):
+                    if self.main_window.progress_arrow.progress > 0.0:
+                        self.main_window.progress_arrow.set_progress(0.0)
                     ogm.interpret_readings({**front_names_dists,**rear_names_dists,**left_side_names_dists,**right_side_names_dists},(x_odo,y_odo,yaw_odo))
                     # mamy macierz grid tych wielkości; z nich trzeba przemnożyć na xy_resolution te indeksy, aby otrzymać właściwe pozycje przeszkód, są większe lub równe od 0
                     ox,oy = ogm.extract_obstacles()
                     #ox,oy = [],[]
-                    find_type = 'parallel'
-                    side = 'right'
+                    find_type = self.controller.find_type
+                    side = self.controller.side
+                    type_changed = old_type != find_type
+                    if type_changed:
+                        self.set_state(f"searching_{side}_{find_type}")
+                        old_type = find_type
                     #,"camera_left_mirror"
                     names_yolo = ["camera_front_right","camera_left_mirror","camera_right_mirror"]
                     for name in names_yolo:  
@@ -953,8 +940,8 @@ class MainWorker(vis.QtCore.QObject):
                                     ogm.yolo_x_pts.append(pt_global[0])
                                     ogm.yolo_y_pts.append(pt_global[1])
                                 
-                            cv2.namedWindow(f"yolo {name}", cv2.WINDOW_NORMAL)
-                            cv2.imshow(f"yolo {name}", image)
+                            #cv2.namedWindow(f"yolo {name}", cv2.WINDOW_NORMAL)
+                            #cv2.imshow(f"yolo {name}", image)
                     
                     spots = []
                     if len(ox) > 0:
@@ -963,46 +950,57 @@ class MainWorker(vis.QtCore.QObject):
                         #cls_old = cls
                         ogm.setup_obstacles(cls)
                         ogm.match_semantics_with_sat()
-                        spots = ogm.find_spots_scanning((x_odo,y_odo,yaw_odo),spot_type = find_type, side = side)
-                        #spot = ogm.find_first_good_spot((x_odo,y_odo,yaw_odo),spot_type = find_type, side = side)
-                        #if spot is not None: spots.append(spot)
-                        spots.extend(ogm.find_spots_scanning((x_odo,y_odo,yaw_odo),spot_type = 'perpendicular', side = 'left'))
+                        spots = ogm.find_spots_scanning((x_odo,y_odo,yaw_odo), find_type, side)
                         ogm.spots = spots
                     else:
                         ox,oy,cls,spots = [],[],[],[]
                 #ox,oy,cls,spots = ogm.ox,ogm.oy,ogm.obstacles,ogm.spots
                 
 
+                traj_to_send = [[x_odo,y_odo,yaw_odo],node_pos,[ogm.ox,ogm.oy],ogm.obstacles,ogm.spots,[ogm.yolo_x_pts,ogm.yolo_y_pts]]
+                
+                traj_data = traj_to_send 
+                speed_data = [now,sp_odo,node_vel_x]
+                angle_data = [now,delta_meas,psi,yaw_webots]
+                
+                self.poseData.emit(pose_measurements)
+                self.trajData.emit(traj_data)
+                self.speedData.emit(speed_data)
+                self.angleData.emit(angle_data)
+
+
+                # dalej planowanie i sterowanie 
+
+
                 p1 = (x_odo,y_odo,yaw_odo)
                 p2,_ = ogm.choose_spot(p1)
                 
-                if self.controller.state == "searching" and p2 is not None:
-                    self.controller.state = "found_spot"
+                if 'searching' in self.controller.state and p2 is not None:
+                    self.set_state("found_spot")
                     target_spot = p2
                     print("[MainWorker] Znaleziono miejsce! Proszę się zatrzymać.")
 
-                elif self.controller.state == "found_spot" and p2 is not None:
+                elif self.controller.state in ["found_spot","found_another_spot"] and p2 is not None:
                     tc = target_spot['center']
                     pc = p2['center']
                     dist = np.hypot(pc[0] - tc[0], pc[1] - tc[1])
-
-                    if dist > 1.0:
+                    if dist > 2.0:
                         target_spot = p2
+                        self.set_state("found_another_spot")
                         print("[MainWorker] Znaleziono nowe miejsce! Proszę się zatrzymać.")
 
-                if self.controller.state == "found_spot":
+                if self.controller.state in ["found_spot","found_another_spot"]:
                     if abs(sp_odo) <= 1e-2:
                         self.controller.timer += dt_real
-                    self.controller.stopped = True if self.controller.timer >= 3.0 and abs(sp_odo) <= 1e-4 else False
+                    self.controller.stopped = True if self.controller.timer >= 2.0 and abs(sp_odo) <= 1e-4 else False
                     if self.controller.stopped:  
-                        self.controller.state = "waiting_for_confirm_start"     
+                        self.set_state("waiting_for_confirm_start")
                         print("[MainWorker] Proszę wcisnąć przycisk E aby rozpocząć parkowanie.")
 
                 if not self.controller.planning_active and self.controller.state == "planning" and self.controller.stopped:
-                    #grid = deepcopy(ogm)
                     self.controller.start_pose = p1
-                    #self.controller.state = "planning"
                     self.controller.planning_active = True
+                    self.set_state("planning")
                     self.controller.goal_pose = (target_spot['target_rear_axle'][0],
                                                     target_spot['target_rear_axle'][1],
                                                     target_spot['orientation'])
@@ -1011,170 +1009,92 @@ class MainWorker(vis.QtCore.QObject):
                     except:
                         print("[MainWorker] Nie udało się uruchomić planowania.")   
 
-                if self.controller.state == "executing":
+                if self.controller.state in ["drive_forward","drive_backward","executing"]:
 
                     x = x_odo
                     y = y_odo
                     yaw = yaw_odo
                     v = sp_odo
                     self.planned_path = self.controller.path or Path([],[],[],[],[])
-                    theta_e, er, k, yaw, ind = self.planned_path.calc_theta_e_and_er(x,y,yaw)
-                    
-                    #v_eff = self.planned_path.directions[ind] * abs(v)
-                    v_eff = v
-                    delta,ind = self.planned_path.rear_wheel_feedback_control(x,y,v_eff,yaw)
-                    delta = -delta
-                    self.path_index = ind
+                    # theta_e, er, k, yaw, ind = self.planned_path.calc_theta_e_and_er(x,y,yaw) 
+                    # delta_tracked,ind = self.planned_path.rear_wheel_feedback_control(x,y,v,yaw) # rear wheel feedback control
+                    # delta_tracked = -delta_tracked
+                    # self.path_index = ind
                     #print(f"delta: {delta}, ind: {ind}")
                     
-                    dist_to_goal = self.planned_path.s[-1] - self.planned_path.s[ind]
-                    if self.planned_path.directions[ind] < 0:
-                        target_v = -C.MAX_SPEED
-                    else:
-                        target_v = C.MAX_SPEED
-                    if ind > 0 and self.planned_path.directions[ind] != self.planned_path.directions[ind-1]:
-                        target_v = 0.0
-                    #v_set = self.planned_path.pid_control(target_v,v,dt_sim)
-                    if abs(v) < 0.05:
-                        delta = 0.0
-                    tracked_pose = (self.planned_path.xs[ind],self.planned_path.ys[ind],self.planned_path.yaws[ind])
-                    self.pathCarData.emit(tracked_pose)
-                    max_rate = 1.5
-                    delta_cmd = np.clip(delta, delta_prev - max_rate*dt_sim, delta_prev + max_rate*dt_sim)
+                    _, er, _, _, ind_nearest = self.planned_path.calc_theta_e_and_er(x,y,yaw) 
+                    
+                    delta_tracked, ind, changed = self.planned_path.pure_pursuit(x, y, yaw, v, ld=0.8) # pure pursuit
+                    delta_tracked = -delta_tracked
+                    #tracked_pose = (self.planned_path.xs[ind],self.planned_path.ys[ind],self.planned_path.yaws[ind])
+                    #self.pathCarData.emit(tracked_pose)
+                    max_rate = 1.0
+                    delta_cmd = np.clip(delta_tracked, delta_prev - max_rate*dt_sim, delta_prev + max_rate*dt_sim)
                     delta_prev = delta_cmd
-                    driver.setSteeringAngle(min(max(-C.MAX_WHEEL_ANGLE,delta_cmd),C.MAX_WHEEL_ANGLE))     
-                    #driver.setCruisingSpeed(v_set)
-                #ogm.yolo_y_pts = []
-                traj_to_send = [[x_odo,y_odo,yaw_odo],node_pos,[ogm.ox,ogm.oy],ogm.obstacles,ogm.spots,[ogm.yolo_x_pts,ogm.yolo_y_pts]]
-                
-                traj_data = traj_to_send 
-                speed_data = [now,sp_odo,node_vel_x]
-                angle_data = [now,delta_meas,psi,yaw_webots]
-                self.sensorData.emit([front_names_dists,rear_names_dists,
-                                      left_side_names_dists,right_side_names_dists,
-                                      max_min_dict])
-                self.poseData.emit(pose_measurements)
-                self.trajData.emit(traj_data)
-                self.speedData.emit(speed_data)
-                self.angleData.emit(angle_data)
-                
+                    #driver.setSteeringAngle(min(max(-C.MAX_WHEEL_ANGLE,delta_cmd),C.MAX_WHEEL_ANGLE))
+                    set_steering_angle(delta_cmd,driver)
 
-                # image = names_images["camera_left_mirror"].copy()
-                
-                # corners,ids = detect_apriltags(image,"camera_left_mirror")
-                # print(f"corners: {corners}, ids: {ids}")
-                # distcoeffs = np.zeros(4).astype(np.float32)
-                # poses = estimate_tag_pose(corners,ids,cam_matrices["camera_left_mirror"],distcoeffs,1.5)
-                # if poses is not None and len(poses)>0:
-                #     id = list(poses.keys())[0]
-                #     rvec, tvec = poses[id]
-                #     vis_image = image.copy()
-                #     vis_image = cv2.cvtColor(vis_image, cv2.COLOR_BGR2RGB)
+                    #ind_nearest = ind
+                    seg_start, seg_end = self.planned_path.get_segment_bounds()
+                    s_start = self.planned_path.s[seg_start]
+                    s_now = self.planned_path.s[ind_nearest]
+                    s_end = self.planned_path.s[seg_end]
+
+                    #er, delta, kappa, ind
+                    kappa = np.nan if abs(v) < 0.05 else yaw_rate / abs(v)
+                    stats = [er,delta_meas,kappa, ind]
+                    self.funcCarData.emit(stats)
+
+                    progress = (s_now - s_start) / max(s_end - s_start, 1e-6)
+                    progress = np.clip(progress, 0.0, 1.0)
+
+                    self.main_window.progress_arrow.set_progress(progress)
                     
-                #     # Definicja osi: origin (0,0,0) + 3 punkty na końcach osi
-                #     axis = np.float32([[block_size/2,0,0], [0,block_size/2,0], [0,0,block_size/2]]).reshape(-1,3)  # 20 cm osie
-                #     imgpts, _ = cv2.projectPoints(axis, rvec, tvec, cam_matrices[name], distcoeffs)
-                    
-                #     # Origin to pierwszy punkt
-                #     #origin = tuple(imgpts[0])
-                #     corn = corners[0].reshape(-1,2)
-                #     # Rysuj osie z origin do każdego punktu
-                #     #cv2.line(vis_image, tuple(corn[0]), tuple(imgpts[0].ravel().astype(int)), (0, 0, 255), 3)   # X - CZERWONY
-                #     #cv2.line(vis_image, tuple(corn[0]), tuple(imgpts[1].ravel().astype(int)), (0, 255, 0), 3)   # Y - ZIELONY
-                #     #cv2.line(vis_image, tuple(corn[0]), tuple(imgpts[2].ravel().astype(int)), (255, 0, 0), 3)   # Z - NIEBIESKI
+                    dir_seg = self.planned_path.directions[seg_start]
+                    if changed:
+                        if dir_seg > 0:
+                            self.set_state("drive_forward")
+                        else:
+                            self.set_state("drive_backward")
 
-                #     # cv2.line(vis_image, tuple(corn[0]), tuple(corn[1]), (0, 0, 255), 3)   # X - CZERWONY
-                #     # cv2.line(vis_image, tuple(corn[0]), tuple(corn[2]), (0, 255, 0), 3)   # Y - ZIELONY
-                #     # cv2.line(vis_image, tuple(corn[0]), tuple(corn[3]), (255, 0, 0), 3)   # Z - NIEBIESKI
-                #     # Opcjonalnie: dodaj etykiety
-                #     cv2.putText(vis_image, "X", tuple(imgpts[0].ravel().astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-                #     cv2.putText(vis_image, "Y", tuple(imgpts[1].ravel().astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                #     cv2.putText(vis_image, "Z", tuple(imgpts[2].ravel().astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-                #     cv2.drawFrameAxes(vis_image,cam_matrices[name],distcoeffs,rvec,tvec,0.75,3)
-                #     cv2.namedWindow("Tag",cv2.WINDOW_NORMAL)
-                #     cv2.imshow("Tag", vis_image) 
-                #     #cv2.imwrite(f"camera_front_right_axes.png",vis_image)
-                #     obj_points = np.float32([[-block_size/2,-block_size/2,0], [-block_size/2,block_size/2,0], [block_size/2,block_size/2,0.0],[block_size/2,-block_size/2,0.0]]).reshape(-1,3)
-                #     projected_points, _ = cv2.projectPoints(obj_points, rvec, tvec, cam_matrices[name], distcoeffs)
+                    last_segment = (self.planned_path.active_segment == len(self.planned_path.segments) - 1)
+                    near_end = (seg_end - ind_nearest) <= 2
+                    low_speed = abs(sp_odo) < 1e-2
 
-                #     # 2. Obliczamy błąd euklidesowy między punktami wykrytymi (corners) a rzutowanymi
-                #     # corners[i] ma kształt (1, 4, 2) lub (4, 1, 2), upewnij się że kształty pasują
-                    
-                #     projected_points = projected_points.reshape(-1, 2)
+                    if last_segment and near_end and low_speed:
+                        self.controller.finish_timer += dt_real
+                    else:
+                        self.controller.finish_timer = 0.0
 
-                #     error = cv2.norm(corn, projected_points, cv2.NORM_L2)
-                #     rms_error = error / len(projected_points) # Błąd średni na punkt w pikselach
+                    if self.controller.finish_timer >= 1.5:
+                        self.set_state("parking_finished")
+                        self.controller.parking_finished = True
 
-                #     print(f"Błąd reprojekcji (root mean square): {rms_error:.4f} px")
+                        set_speed(0.0, driver)
+                        set_steering_angle(0.0, driver)
 
-                #     if name == "camera_left_mirror":
-                #         chessboard_position = tag_position
-                #         chessboard_yaw = 0  # degrees
-                #         #rvec,tvec = cc.solve_camera_pose(image,pattern_size,cam_matrices[name],name)
-                #         #if R is not None and tvec is not None:
-                #         T_chessboard_to_center = sy.build_pose_matrix(chessboard_position, chessboard_yaw)
+                        continue
 
-                #         R, _ = cv2.Rodrigues(rvec)
-                #         T_camera_to_chessboard = np.linalg.inv(sy.build_homogeneous_transform(R, tvec))
+                if self.controller.state == "parking_finished" and self.controller.parking_finished:
+                    max_rate = 0.5
+                    delta_tracked = 0.0
+                    delta_cmd = np.clip(delta_tracked, delta_prev - max_rate*dt_sim, delta_prev + max_rate*dt_sim)
+                    delta_prev = delta_cmd
+                    set_steering_angle(delta_cmd,driver)
+                    self.main_window.progress_arrow.set_progress(0.0)
 
-                #         # Combine to get rear axle → camera
-                #         T_center_to_camera = T_chessboard_to_center @ T_camera_to_chessboard
-                        
-                #         # Project bbox
-                #         bbox_world = np.array([
-                #             [-0.6+block_size, 2.8+block_size, 0],   # bottom front right
-                #             [-0.6+block_size,2.8-block_size, 0],  # bottom front left
-                #             [-0.6-block_size, 2.8-block_size, 0],  # bottom rear left
-                #             [-0.6-block_size, 2.8+block_size, 0],   # bottom rear right
-                #             [-0.6+block_size, 2.8+block_size, 1.0],   # bottom front right
-                #             [-0.6+block_size,2.8-block_size, 1.0],  # bottom front left
-                #             [-0.6-block_size, 2.8-block_size, 1.0],  # bottom rear left
-                #             [-0.6-block_size, 2.8+block_size, 1.0],   # bottom rear right
-                #         ])
-                #         image_points = sy.project_points_world_to_image(bbox_world, T_center_to_camera, cam_matrices[name])
-                #         # Draw bottom rectangle
-                #         for i in range(4):
-                #             pt1 = image_points[i]
-                #             pt2 = image_points[(i + 1) % 4]
-                #             cv2.line(vis_image, pt1, pt2, (0, 255, 0), 2)
-
-                #         # Draw top rectangle
-                #         for i in range(4, 8):
-                #             pt1 = image_points[i]
-                #             pt2 = image_points[4 + (i + 1) % 4]
-                #             cv2.line(vis_image, pt1, pt2, (0, 0, 255), 2)
-
-                #         # Draw vertical lines
-                #         for i in range(4):
-                #             pt1 = image_points[i]
-                #             pt2 = image_points[i + 4]
-                #             cv2.line(vis_image, pt1, pt2, (255, 0, 0), 2)
-                #         cv2.namedWindow(f"Projected 3D BBox {name}",cv2.WINDOW_NORMAL)
-                #         cv2.imshow(f"Projected 3D BBox {name}", vis_image)
-                #         print(f"[{name}] pose wrt rear axle (T_center_to_camera):\n", T_center_to_camera)
-                #         save_homo(T_center_to_camera,f"{name}_T_global")
-                    
-
-                
                 cv2.waitKey(1)
             elif not cont.parking:
                 self.first_call_pose = True
                 self.first_call_traj = True
-                #ogm.ox,ogm.oy,ogm.obstacles,ogm.spots = [],[],[],[]
                 ogm = OccupancyGrid()
                 ogm.setup_sensors(self.front_ultrasonic_sensor_poses,
                                     self.rear_ultrasonic_sensor_poses,
                                     [front_sensor_names,rear_sensor_names,right_side_sensor_names,left_side_sensor_names],
                                     [front_sen_apertures,rear_sen_apertures,right_side_sen_apertures,left_side_sen_apertures],
                                     max_min_dict)
-                #prev_time = driver.getTime()
-                #prev_real = time.time()
-                
-                
-            #if now - last_key_time >= KEYBOARD_INTERVAL:
-            
-            #last_key_time = now
-            
+                old_type = None
+
 
         app.quit()
 
@@ -1185,8 +1105,11 @@ if __name__ == "__main__":
     app = vis.pg.QtWidgets.QApplication(sys.argv)
     cont = VisController()
     
+    win = vis.MainWindow(cont)
+    win.show()
+
     thread = vis.QtCore.QThread()
-    worker = MainWorker(supervisor,cont)
+    worker = MainWorker(supervisor,cont,win)
     worker.moveToThread(thread)
 
     # sygnały z mainworker
@@ -1199,24 +1122,25 @@ if __name__ == "__main__":
     worker.stateData.connect(cont.stateUpdated)
     worker.pathData.connect(cont.pathUpdated)
     worker.pathCarData.connect(cont.pathCarUpdated)
+    worker.funcCarData.connect(cont.funcCarUpdated)
+    worker.segmentProgressData.connect(cont.segmentProgressUpdated)
     worker.finished.connect(thread.quit)
     worker.finished.connect(worker.deleteLater)
     thread.finished.connect(thread.deleteLater)
 
     thread.start()
 
-    win  = vis.SensorView(cont)
-    win.hide()
+    #win1 = vis.SpeedView(cont)
+    #win1.hide()
 
-    win1 = vis.SpeedView(cont)
-    win1.hide()
-
-    win2 = vis.AngleView(cont)
-    win2.hide()
+    #win2 = vis.AngleView(cont)
+    #win2.hide()
 
     win3 = vis.TrajView(cont)
     win3.hide()
     
+    #win4 = vis.YawKappaView(cont)
+    #win4.hide()
     sys.exit(app.exec())
 
 
@@ -1533,3 +1457,151 @@ yaw = imu.getRollPitchYaw()[2] - yaw_init
                     cv2.imshow("Maski z punktami najblizszymi", right_copy)
 """
 
+# image = names_images["camera_left_mirror"].copy()
+
+# corners,ids = detect_apriltags(image,"camera_left_mirror")
+# print(f"corners: {corners}, ids: {ids}")
+# distcoeffs = np.zeros(4).astype(np.float32)
+# poses = estimate_tag_pose(corners,ids,cam_matrices["camera_left_mirror"],distcoeffs,1.5)
+# if poses is not None and len(poses)>0:
+#     id = list(poses.keys())[0]
+#     rvec, tvec = poses[id]
+#     vis_image = image.copy()
+#     vis_image = cv2.cvtColor(vis_image, cv2.COLOR_BGR2RGB)
+    
+#     # Definicja osi: origin (0,0,0) + 3 punkty na końcach osi
+#     axis = np.float32([[block_size/2,0,0], [0,block_size/2,0], [0,0,block_size/2]]).reshape(-1,3)  # 20 cm osie
+#     imgpts, _ = cv2.projectPoints(axis, rvec, tvec, cam_matrices[name], distcoeffs)
+    
+#     # Origin to pierwszy punkt
+#     #origin = tuple(imgpts[0])
+#     corn = corners[0].reshape(-1,2)
+#     # Rysuj osie z origin do każdego punktu
+#     #cv2.line(vis_image, tuple(corn[0]), tuple(imgpts[0].ravel().astype(int)), (0, 0, 255), 3)   # X - CZERWONY
+#     #cv2.line(vis_image, tuple(corn[0]), tuple(imgpts[1].ravel().astype(int)), (0, 255, 0), 3)   # Y - ZIELONY
+#     #cv2.line(vis_image, tuple(corn[0]), tuple(imgpts[2].ravel().astype(int)), (255, 0, 0), 3)   # Z - NIEBIESKI
+
+#     # cv2.line(vis_image, tuple(corn[0]), tuple(corn[1]), (0, 0, 255), 3)   # X - CZERWONY
+#     # cv2.line(vis_image, tuple(corn[0]), tuple(corn[2]), (0, 255, 0), 3)   # Y - ZIELONY
+#     # cv2.line(vis_image, tuple(corn[0]), tuple(corn[3]), (255, 0, 0), 3)   # Z - NIEBIESKI
+#     # Opcjonalnie: dodaj etykiety
+#     cv2.putText(vis_image, "X", tuple(imgpts[0].ravel().astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+#     cv2.putText(vis_image, "Y", tuple(imgpts[1].ravel().astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+#     cv2.putText(vis_image, "Z", tuple(imgpts[2].ravel().astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+#     cv2.drawFrameAxes(vis_image,cam_matrices[name],distcoeffs,rvec,tvec,0.75,3)
+#     cv2.namedWindow("Tag",cv2.WINDOW_NORMAL)
+#     cv2.imshow("Tag", vis_image) 
+#     #cv2.imwrite(f"camera_front_right_axes.png",vis_image)
+#     obj_points = np.float32([[-block_size/2,-block_size/2,0], [-block_size/2,block_size/2,0], [block_size/2,block_size/2,0.0],[block_size/2,-block_size/2,0.0]]).reshape(-1,3)
+#     projected_points, _ = cv2.projectPoints(obj_points, rvec, tvec, cam_matrices[name], distcoeffs)
+
+#     # 2. Obliczamy błąd euklidesowy między punktami wykrytymi (corners) a rzutowanymi
+#     # corners[i] ma kształt (1, 4, 2) lub (4, 1, 2), upewnij się że kształty pasują
+    
+#     projected_points = projected_points.reshape(-1, 2)
+
+#     error = cv2.norm(corn, projected_points, cv2.NORM_L2)
+#     rms_error = error / len(projected_points) # Błąd średni na punkt w pikselach
+
+#     print(f"Błąd reprojekcji (root mean square): {rms_error:.4f} px")
+
+#     if name == "camera_left_mirror":
+#         chessboard_position = tag_position
+#         chessboard_yaw = 0  # degrees
+#         #rvec,tvec = cc.solve_camera_pose(image,pattern_size,cam_matrices[name],name)
+#         #if R is not None and tvec is not None:
+#         T_chessboard_to_center = sy.build_pose_matrix(chessboard_position, chessboard_yaw)
+
+#         R, _ = cv2.Rodrigues(rvec)
+#         T_camera_to_chessboard = np.linalg.inv(sy.build_homogeneous_transform(R, tvec))
+
+#         # Combine to get rear axle → camera
+#         T_center_to_camera = T_chessboard_to_center @ T_camera_to_chessboard
+        
+#         # Project bbox
+#         bbox_world = np.array([
+#             [-0.6+block_size, 2.8+block_size, 0],   # bottom front right
+#             [-0.6+block_size,2.8-block_size, 0],  # bottom front left
+#             [-0.6-block_size, 2.8-block_size, 0],  # bottom rear left
+#             [-0.6-block_size, 2.8+block_size, 0],   # bottom rear right
+#             [-0.6+block_size, 2.8+block_size, 1.0],   # bottom front right
+#             [-0.6+block_size,2.8-block_size, 1.0],  # bottom front left
+#             [-0.6-block_size, 2.8-block_size, 1.0],  # bottom rear left
+#             [-0.6-block_size, 2.8+block_size, 1.0],   # bottom rear right
+#         ])
+#         image_points = sy.project_points_world_to_image(bbox_world, T_center_to_camera, cam_matrices[name])
+#         # Draw bottom rectangle
+#         for i in range(4):
+#             pt1 = image_points[i]
+#             pt2 = image_points[(i + 1) % 4]
+#             cv2.line(vis_image, pt1, pt2, (0, 255, 0), 2)
+
+#         # Draw top rectangle
+#         for i in range(4, 8):
+#             pt1 = image_points[i]
+#             pt2 = image_points[4 + (i + 1) % 4]
+#             cv2.line(vis_image, pt1, pt2, (0, 0, 255), 2)
+
+#         # Draw vertical lines
+#         for i in range(4):
+#             pt1 = image_points[i]
+#             pt2 = image_points[i + 4]
+#             cv2.line(vis_image, pt1, pt2, (255, 0, 0), 2)
+#         cv2.namedWindow(f"Projected 3D BBox {name}",cv2.WINDOW_NORMAL)
+#         cv2.imshow(f"Projected 3D BBox {name}", vis_image)
+#         print(f"[{name}] pose wrt rear axle (T_center_to_camera):\n", T_center_to_camera)
+#         save_homo(T_center_to_camera,f"{name}_T_global")
+
+
+
+
+# if not path_built:
+#     point1 = (x_odo,y_odo,yaw_odo)
+#     point2 = (10.0,30.0,np.pi/2)
+#     path_xs = []
+#     path_ys = []
+#     path_yaws = []
+#     path_dirs = []
+#     path_curvs = []
+#     path = reeds_shepp.path_sample(point1,point2,C.MAX_RADIUS,0.05)
+#     for p in path:
+#         path_xs.append(p[0])
+#         path_ys.append(p[1])
+#         path_yaws.append(p[2])
+#         path_dirs.append(np.sign(p[4]))
+#         path_curvs.append(-p[3])
+#     ref_path = Path(path_xs,path_ys,path_yaws,path_dirs,path_curvs,[])
+#     self.pathData.emit(ref_path)
+#     path_built = True
+
+
+# if ref_path is not None and path_built:
+#     x = x_odo
+#     y = y_odo
+#     yaw = yaw_odo
+#     v = sp_odo
+    
+#     dir_ref = ref_path.directions[self.path_index]   
+#     v_eff = dir_ref * abs(v)
+
+#     delta,ind = ref_path.rear_wheel_feedback_control(x,y,v_eff,yaw)
+#     self.path_index = ind
+#     delta = delta
+#     #print(f"delta: {delta}, ind: {ind}")
+    
+#     dist_to_goal = ref_path.s[-1] - ref_path.s[ind]
+#     target_v = dir_ref * C.MAX_SPEED
+#     if ind > 0 and ref_path.directions[ind] != ref_path.directions[ind-1]:
+#         target_v = 0.0
+#     if dist_to_goal <= 3.0:
+#         target_v = 0.0
+#     v_set = ref_path.pid_control(target_v,v,dt_sim)
+    
+#     tracked_pose = (ref_path.xs[ind],ref_path.ys[ind],ref_path.yaws[ind])
+#     self.pathCarData.emit(tracked_pose)
+#     max_rate = 0.5
+#     delta_cmd = np.clip(delta, delta_prev - max_rate*dt_sim, delta_prev + max_rate*dt_sim)
+#     delta_prev = delta_cmd
+#     #delta_cmd = max(-C.MAX_WHEEL_ANGLE, min(C.MAX_WHEEL_ANGLE, delta))
+#     driver.setSteeringAngle(min(max(-C.MAX_WHEEL_ANGLE,delta_cmd),C.MAX_WHEEL_ANGLE))     
+    

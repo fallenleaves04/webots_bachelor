@@ -1455,7 +1455,7 @@ class PlanningWorker(QtCore.QObject):
 
 if __name__ == "__main__":
     # TEST REEDS-SHEPP
-    """
+    
     start = (0.0,0.0,0.0)
     goal = [(40.0,-60.0,-np.pi/4),(20.0,-10.0,-np.pi/4),(5.0,-80.0,-np.pi/2),(-20.0,25.0,-np.pi/6),
             (-80.0,100.0,-np.pi/4),(11.0,5.0,-np.pi/3),(3.0,10.0,-np.pi*3),(-10.0,5.0,-np.pi)]
@@ -1463,7 +1463,7 @@ if __name__ == "__main__":
     max_delta = 0.5
     radius = wheelbase/np.tan(max_delta)
     t0 = time.time()
-    for _ in range(1000):
+    for _ in range(100):
         for g in goal:
             s = reeds_shepp.path_sample(start,g,radius,step_size=0.1)
             l = reeds_shepp.path_length(start,g,radius)
@@ -1471,12 +1471,11 @@ if __name__ == "__main__":
 
     tt = time.time()
     print(f"Czas: {tt-t0}")
-    """
+    
     # CZĘŚĆ DLA QT I HYBRID-A*
     
     app = pg.QtWidgets.QApplication(sys.argv)
     win = MainWindow()
     win.show()
-    
 
     sys.exit(app.exec())
