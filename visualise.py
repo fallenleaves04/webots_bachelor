@@ -45,7 +45,16 @@ class SpeedView(pg.GraphicsLayoutWidget):
 
         cont.speedUpdated.connect(self.update_speed)
         cont.parkingToggled.connect(self.on_parking_change)
+        cont.clearDataPlots.connect(self.clear_plots)
 
+    @QtCore.pyqtSlot()
+    def clear_plots(self):
+        self.t1t = []
+        self.t1v1 = []
+        self.t2v2 = []
+
+        self.pl1.setData([], [])
+        self.pl2.setData([], [])
     @QtCore.pyqtSlot(object)
     def update_speed(self, speed_data):
         t = speed_data[0]
@@ -97,7 +106,19 @@ class AngleView(pg.GraphicsLayoutWidget):
 
         cont.angleUpdated.connect(self.update_angle)
         cont.parkingToggled.connect(self.on_parking_change)
+        cont.clearDataPlots.connect(self.clear_plots)
 
+    @QtCore.pyqtSlot()
+    def clear_plots(self):
+        self.t1t = []
+        self.t1a = []
+        self.t2y = []
+        self.t3y = []
+
+        self.pl1.setData([], [])
+        self.pl2.setData([], [])
+        self.pl3.setData([], [])
+        
     @QtCore.pyqtSlot(object)
     def update_angle(self, angle_data):
         t = angle_data[0]
@@ -127,7 +148,7 @@ class AngleView(pg.GraphicsLayoutWidget):
 class YawKappaView(pg.GraphicsLayoutWidget):   
     def __init__(self,cont):
         super().__init__(title="Wykresy skrętu kół, krzywizny i odchylenia w funkcji długości ścieżki")
-        #self.setBackground((235,235,250))
+        self.setBackground((235,235,250))
 
         
         self.stack = QtWidgets.QStackedWidget()
@@ -172,6 +193,7 @@ class YawKappaView(pg.GraphicsLayoutWidget):
 
     def make_plots(self,title, xlabel, ylabel, name_ref, name_exec):
         w = pg.PlotWidget(title=title)
+        w.setBackground((235, 235, 250))
         w.showGrid(True, True)
         w.setLabel('bottom', xlabel)
         w.setLabel('left', ylabel)
@@ -199,12 +221,13 @@ class YawKappaView(pg.GraphicsLayoutWidget):
         if ind < 0 or ind >= len(self.s):
             return
 
-        self.exec_data[ind] = (er, delta, kappa)
+        s_now = self.s[ind]
+        self.exec_data[s_now] = (er, delta, kappa)
 
         inds = sorted(self.exec_data.keys())
-        s_vals = [self.s[i] for i in inds]
+        s_vals = sorted(self.exec_data.keys())
 
-        er_vals = [self.exec_data[i][0] for i in inds]
+        er_vals = [self.exec_data[s][0] for s in s_vals]
         delta_vals = [self.exec_data[i][1] for i in inds]
         kappa_vals = [self.exec_data[i][2] for i in inds]
 
@@ -255,7 +278,7 @@ class TrajView(pg.GraphicsLayoutWidget):
         self.t2x, self.t2y = [], []
         self.t3x, self.t3y = [], []
         self.t4x, self.t4y = [], []
-        self.t5x, self.t5y = [], []
+        #self.t5x, self.t5y = [], []
         self.t6x, self.t6y = [], []
         self.tx_yolo,self.ty_yolo = [],[]
         # Krzywe
@@ -264,8 +287,8 @@ class TrajView(pg.GraphicsLayoutWidget):
         self.traj_curve3 = self.view_trajectory.plot([], [], pen=None, symbol='s',symbolSize=4,symbolBrush='k',symbolPen=None, name="Przeszkody")
         #self.traj_curve_yolo = self.view_trajectory.plot([], [], pen=None, symbol='t',symbolSize=2,symbolBrush='k',symbolPen=None, name="YOLO")
         self.traj_curve4 = self.view_trajectory.plot([], [], pen=None, symbol='o',symbolSize=5,symbolBrush='k',symbolPen=None, name="Miejsca pojazdu")
-        self.traj_curve5 = self.view_trajectory.plot([], [], pen='g', name="Przykładowa ścieżka")
-        self.traj_curve6 = self.view_trajectory.plot([], [], pen=pg.mkPen(color=(0, 100, 100), width=1.5), name="Ścieżka Hybrid")
+        #self.traj_curve5 = self.view_trajectory.plot([], [], pen='g', name="Przykładowa ścieżka")
+        self.traj_curve6 = self.view_trajectory.plot([], [], pen=pg.mkPen(color=(0, 100, 100), width=1.5), name="Ścieżka Hybrid-A*")
         #
         self.view_trajectory.setClipToView(True)
         self.view_trajectory.setDownsampling(mode='peak')
@@ -408,9 +431,9 @@ class TrajView(pg.GraphicsLayoutWidget):
         #         self.t6x.append(data[6][j])
         #         self.t6y.append(data[6][j])
         
-        self.traj_curve5.setData(self.t5x,self.t5y)
+        #self.traj_curve5.setData(self.t5x,self.t5y)
         self.t4x.clear();self.t4y.clear()
-        self.t5x.clear();self.t5y.clear()
+        #self.t5x.clear();self.t5y.clear()
         car_yaw = data[0][2]
         self.transform_car_item(self.car_rect,(x1,y1,car_yaw))
 

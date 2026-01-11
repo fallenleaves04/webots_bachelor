@@ -188,6 +188,7 @@ class VisController(vis.QtCore.QObject):
     pathCarUpdated = vis.QtCore.pyqtSignal(object) # dla aktualizacji względem ścieżki
     funcCarUpdated = vis.QtCore.pyqtSignal(object) # dla wykresów yaw, kappa i delta - weryfikacja ścieżki
     segmentProgressUpdated = vis.QtCore.pyqtSignal(object) # dla strzałki na wizualizacji, progres segmentu
+    clearDataPlots = vis.QtCore.pyqtSignal() # do czyszczenia wykresów
 
     def __init__(self):
         super().__init__()
@@ -205,6 +206,9 @@ class VisController(vis.QtCore.QObject):
 
         self.finish_timer = 0.0
         self.parking_finished = False
+
+        self.found_spot = False
+        self.found_another_spot = False
 
     @vis.QtCore.pyqtSlot()
     def toggle_parking(self):
@@ -239,6 +243,7 @@ class MainWorker(vis.QtCore.QObject):
     pathCarData = vis.QtCore.pyqtSignal(object) # dla przesyłania bieżącego śledzonego punktu trajektorii
     funcCarData = vis.QtCore.pyqtSignal(object) # dla przesyłania yaw, kappa, delta - wykresy weryfikacji ścieżki
     segmentProgressData = vis.QtCore.pyqtSignal(object) # dla przesyłania progresu przejazdu segmentu ścieżki
+    clearDataPlots = vis.QtCore.pyqtSignal() # do czyszczenia wykresów
     finished    = vis.QtCore.pyqtSignal(bool)   # ukończenie życia wątku
     
 
@@ -263,6 +268,9 @@ class MainWorker(vis.QtCore.QObject):
         self.planning_thread = None
 
         self.main_window = main_window
+
+        self.prev_time = driver.getTime()
+        self.prev_real = time.time()
         
     def _load_or_save_pose(self, name, Tp_s, target_dict):
         path = f"sensor_poses/{name}.npy"
@@ -337,6 +345,7 @@ class MainWorker(vis.QtCore.QObject):
         self.planning_worker.finished.connect(self.planning_finished) 
 
         self.planning_thread.start()
+        self.clearDataPlots.emit()
 
     def set_state(self, new_state):
         self.controller.state = new_state
@@ -704,7 +713,8 @@ class MainWorker(vis.QtCore.QObject):
                     enc0[i] = raw_enc[i]
                     prev_enc[i] = raw_enc[i]
                 node_pos0 = self.node.getPosition()
-                
+                self.prev_real = time.time()
+                self.prev_time = driver.getTime()
                 R0 = R_xyz(im0[2], im0[1], im0[0])   # orientacja początkowa
                 self.first_call_pose = False
                 return {
@@ -740,7 +750,6 @@ class MainWorker(vis.QtCore.QObject):
             sp_odo,encoders = get_speed_odo(dt)
             delta = -driver.getSteeringAngle()  # kąt skrętu kół [rad]
             gyr = gyro.getValues()
-            dpsi_gyr = gyr[2] * dt
             # aktualizacja z uśrednieniem psi, później się dodaje
             dpsi_odo = (sp_odo * np.tan(delta) / wheelbase) * dt
             # akcelerometr
@@ -835,32 +844,119 @@ class MainWorker(vis.QtCore.QObject):
         
         model(np.ones((4,1,3)),half=True,device = 0,conf=0.6,verbose=False,imgsz=(640,480))
 
-        # PLANER HYBRID A*
+        # pomocnicze DLA PLANERA I REGULATORA
         p1 = None
         p2 = None
+        # test ścieżki
         import reeds_shepp
         path_built = False
         path = None
         ref_path = None
-        self.path_index = int(0.0)
-        delta_prev = 0.0
-
+        
+        # dla miejsc
         old_type = None
         
         # dla ścieżki
-        
+        init_maneuver = True
+        delta_prev = 0.0
 
+        
+        class ExperimentLogger:
+            def __init__(self):
+                self.reset()
+
+            def reset(self):
+                self.active = False
+                self.t0 = None
+
+                self.t = []
+                self.delta = []
+
+                self.yaw_webots = []
+                self.yaw_odo = []
+
+                self.x = []
+                self.y = []
+
+                self.v = []
+                self.er = []
+
+            def start(self, sim_time):
+                self.reset()
+                self.active = True
+                self.t0 = sim_time
+
+            def stop(self):
+                self.active = False
+
+            def log(self, sim_time, *, delta, yaw_webots, yaw_odo, x, y, v, er=None):
+                if not self.active:
+                    return
+
+                t_rel = sim_time - self.t0
+
+                self.t.append(t_rel)
+                self.delta.append(delta)
+                self.yaw_webots.append(yaw_webots)
+                self.yaw_odo.append(yaw_odo)
+                self.x.append(x)
+                self.y.append(y)
+                self.v.append(v)
+                self.er.append(er)
+                
+        def compute_metrics(log:ExperimentLogger, planned_path:Path):
+            t = np.array(log.t)
+            x = np.array(log.x)
+            y = np.array(log.y)
+            v = np.array(log.v)
+            er = np.array([e for e in log.er if e is not None])
+
+            # czas trwania
+            total_time = t[-1] - t[0]
+
+            # średnia prędkość
+            mean_speed = np.mean(np.abs(v))
+
+            # długość rzeczywistej trajektorii
+            dx = np.diff(x)
+            dy = np.diff(y)
+            path_length = np.sum(np.hypot(dx, dy))
+
+            # ilość segmentów
+            num_segments = len(planned_path.segments)
+
+            # średnie odchylenie od ścieżki
+            mean_er = np.mean(np.abs(er)) if len(er) > 0 else np.nan
+
+            # błąd końcowy
+            x_end_err = x[-1] - planned_path.goal[0]
+            y_end_err = y[-1] - planned_path.goal[1]
+            yaw_end_err = log.yaw_odo[-1] - planned_path.goal[2]
+
+            return {
+                "path_length": path_length,
+                "segments": num_segments,
+                "mean_er": mean_er,
+                "x_err": x_end_err,
+                "y_err": y_end_err,
+                "yaw_err": yaw_end_err,
+                "time": total_time,
+                "mean_speed": mean_speed
+            }
+
+        self.exp_logger = ExperimentLogger()
+        write_logs = True
         while robot.step(64) != -1:
             check_keyboard(cont)
             vis.QtCore.QCoreApplication.processEvents()
 
             now_real = time.time()
-            dt_real = now_real - prev_real
-            prev_real = now_real
+            dt_real = now_real - self.prev_real
+            self.prev_real = now_real
             
             now = driver.getTime()
-            dt_sim = now - prev_time
-            prev_time = now
+            dt_sim = now - self.prev_time
+            self.prev_time = now
 
             pose_measurements = get_pose(dt_sim)
             
@@ -908,8 +1004,12 @@ class MainWorker(vis.QtCore.QObject):
                     if type_changed:
                         self.set_state(f"searching_{side}_{find_type}")
                         old_type = find_type
-                    #,"camera_left_mirror"
-                    names_yolo = ["camera_front_right","camera_left_mirror","camera_right_mirror"]
+                    
+                    if self.controller.side == "right":
+                        names_yolo = ["camera_front_right","camera_right_mirror"]
+                    else:
+                        names_yolo = ["camera_front_right","camera_left_mirror"]
+                    #names_yolo = ["camera_front_right","camera_left_mirror","camera_right_mirror"]
                     for name in names_yolo:  
                         image = names_images[name].copy()
                         results = model(image,half=True,device = 0,conf=0.6,verbose=False,imgsz=(640,480))
@@ -951,22 +1051,14 @@ class MainWorker(vis.QtCore.QObject):
                         ogm.setup_obstacles(cls)
                         ogm.match_semantics_with_sat()
                         spots = ogm.find_spots_scanning((x_odo,y_odo,yaw_odo), find_type, side)
+                        #spots.extend(ogm.find_spots_scanning((x_odo,y_odo,yaw_odo), "perpendicular", "left"))
                         ogm.spots = spots
                     else:
                         ox,oy,cls,spots = [],[],[],[]
                 #ox,oy,cls,spots = ogm.ox,ogm.oy,ogm.obstacles,ogm.spots
                 
 
-                traj_to_send = [[x_odo,y_odo,yaw_odo],node_pos,[ogm.ox,ogm.oy],ogm.obstacles,ogm.spots,[ogm.yolo_x_pts,ogm.yolo_y_pts]]
                 
-                traj_data = traj_to_send 
-                speed_data = [now,sp_odo,node_vel_x]
-                angle_data = [now,delta_meas,psi,yaw_webots]
-                
-                self.poseData.emit(pose_measurements)
-                self.trajData.emit(traj_data)
-                self.speedData.emit(speed_data)
-                self.angleData.emit(angle_data)
 
 
                 # dalej planowanie i sterowanie 
@@ -976,12 +1068,17 @@ class MainWorker(vis.QtCore.QObject):
                 p2,_ = ogm.choose_spot(p1)
                 
                 if 'searching' in self.controller.state and p2 is not None:
-                    self.set_state("found_spot")
+                    self.controller.found_spot = True
                     target_spot = p2
+                    self.set_state("found_spot")
                     print("[MainWorker] Znaleziono miejsce! Proszę się zatrzymać.")
-
-                elif self.controller.state in ["found_spot","found_another_spot"] and p2 is not None:
-                    tc = target_spot['center']
+                elif self.controller.found_spot and p2 is None:
+                    self.set_state("return_searching")
+                    self.controller.found_spot = False
+                    target_spot = None
+                    print("[MainWorker] Miejsce porzucone. Poszukiwanie dalsze...")
+                if self.controller.state in ["return_searching"] and p2 is not None:
+                    tc = target_spot['center'] or (0,0)
                     pc = p2['center']
                     dist = np.hypot(pc[0] - tc[0], pc[1] - tc[1])
                     if dist > 2.0:
@@ -989,15 +1086,16 @@ class MainWorker(vis.QtCore.QObject):
                         self.set_state("found_another_spot")
                         print("[MainWorker] Znaleziono nowe miejsce! Proszę się zatrzymać.")
 
-                if self.controller.state in ["found_spot","found_another_spot"]:
-                    if abs(sp_odo) <= 1e-2:
+                if (self.controller.found_spot or self.controller.found_another_spot) and self.controller.state in ["found_spot","found_another_spot"]:
+                    if abs(sp_odo) <= 1e-4:
                         self.controller.timer += dt_real
-                    self.controller.stopped = True if self.controller.timer >= 2.0 and abs(sp_odo) <= 1e-4 else False
+                    self.controller.stopped = True if self.controller.timer >= 1.0 and abs(sp_odo) <= 1e-4 else False
                     if self.controller.stopped:  
                         self.set_state("waiting_for_confirm_start")
                         print("[MainWorker] Proszę wcisnąć przycisk E aby rozpocząć parkowanie.")
 
                 if not self.controller.planning_active and self.controller.state == "planning" and self.controller.stopped:
+                    self.exp_logger.start(driver.getTime())
                     self.controller.start_pose = p1
                     self.controller.planning_active = True
                     self.set_state("planning")
@@ -1010,7 +1108,7 @@ class MainWorker(vis.QtCore.QObject):
                         print("[MainWorker] Nie udało się uruchomić planowania.")   
 
                 if self.controller.state in ["drive_forward","drive_backward","executing"]:
-
+                    
                     x = x_odo
                     y = y_odo
                     yaw = yaw_odo
@@ -1042,7 +1140,7 @@ class MainWorker(vis.QtCore.QObject):
 
                     #er, delta, kappa, ind
                     kappa = np.nan if abs(v) < 0.05 else yaw_rate / abs(v)
-                    stats = [er,delta_meas,kappa, ind]
+                    stats = [er,delta_meas,kappa, ind_nearest]
                     self.funcCarData.emit(stats)
 
                     progress = (s_now - s_start) / max(s_end - s_start, 1e-6)
@@ -1051,11 +1149,25 @@ class MainWorker(vis.QtCore.QObject):
                     self.main_window.progress_arrow.set_progress(progress)
                     
                     dir_seg = self.planned_path.directions[seg_start]
-                    if changed:
+                    
+                    if init_maneuver or changed:
+                        init_maneuver = False
                         if dir_seg > 0:
                             self.set_state("drive_forward")
                         else:
                             self.set_state("drive_backward")
+
+                    self.exp_logger.log(
+                        driver.getTime(),
+                        delta=delta_meas,
+                        yaw_webots=yaw_webots,
+                        yaw_odo=yaw_odo,
+                        x=x_odo,
+                        y=y_odo,
+                        v=sp_odo,
+                        er=er
+                    )
+
 
                     last_segment = (self.planned_path.active_segment == len(self.planned_path.segments) - 1)
                     near_end = (seg_end - ind_nearest) <= 2
@@ -1070,18 +1182,35 @@ class MainWorker(vis.QtCore.QObject):
                         self.set_state("parking_finished")
                         self.controller.parking_finished = True
 
-                        set_speed(0.0, driver)
-                        set_steering_angle(0.0, driver)
+                        #set_speed(0.0, driver)
+                        #set_steering_angle(0.0, driver)
 
                         continue
 
                 if self.controller.state == "parking_finished" and self.controller.parking_finished:
-                    max_rate = 0.5
+                    self.exp_logger.stop()
+                    if write_logs:
+                        logs = compute_metrics(self.exp_logger,self.planned_path)
+                        print(f"Logi po ukończeniu parkowania: {logs}")
+                        write_logs = False
+                    max_rate = 1.0
                     delta_tracked = 0.0
                     delta_cmd = np.clip(delta_tracked, delta_prev - max_rate*dt_sim, delta_prev + max_rate*dt_sim)
                     delta_prev = delta_cmd
                     set_steering_angle(delta_cmd,driver)
                     self.main_window.progress_arrow.set_progress(0.0)
+
+                if self.controller.state != "parking_finished":
+                    traj_to_send = [[x_odo,y_odo,yaw_odo],node_pos,[ogm.ox,ogm.oy],ogm.obstacles,ogm.spots,[ogm.yolo_x_pts,ogm.yolo_y_pts]]
+                    
+                    traj_data = traj_to_send 
+                    speed_data = [now,sp_odo,node_vel_x]
+                    angle_data = [now,delta_meas,psi,yaw_webots]
+                    
+                    self.poseData.emit(pose_measurements)
+                    self.trajData.emit(traj_data)
+                    self.speedData.emit(speed_data)
+                    self.angleData.emit(angle_data)
 
                 cv2.waitKey(1)
             elif not cont.parking:
@@ -1094,6 +1223,7 @@ class MainWorker(vis.QtCore.QObject):
                                     [front_sen_apertures,rear_sen_apertures,right_side_sen_apertures,left_side_sen_apertures],
                                     max_min_dict)
                 old_type = None
+                write_logs = True
 
 
         app.quit()
@@ -1124,23 +1254,24 @@ if __name__ == "__main__":
     worker.pathCarData.connect(cont.pathCarUpdated)
     worker.funcCarData.connect(cont.funcCarUpdated)
     worker.segmentProgressData.connect(cont.segmentProgressUpdated)
+    worker.clearDataPlots.connect(cont.clearDataPlots)
     worker.finished.connect(thread.quit)
     worker.finished.connect(worker.deleteLater)
     thread.finished.connect(thread.deleteLater)
 
     thread.start()
 
-    #win1 = vis.SpeedView(cont)
-    #win1.hide()
+    win1 = vis.SpeedView(cont)
+    win1.hide()
 
-    #win2 = vis.AngleView(cont)
-    #win2.hide()
+    win2 = vis.AngleView(cont)
+    win2.hide()
 
     win3 = vis.TrajView(cont)
     win3.hide()
     
-    #win4 = vis.YawKappaView(cont)
-    #win4.hide()
+    win4 = vis.YawKappaView(cont)
+    win4.hide()
     sys.exit(app.exec())
 
 

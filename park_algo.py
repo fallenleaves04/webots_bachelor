@@ -61,7 +61,7 @@ class C:
     c_val = 1.5
     FORWARD_COST = c_val*1.2
     BACKWARD_COST = c_val*1.2
-    GEAR_CHANGE_COST = c_val*3.0
+    GEAR_CHANGE_COST = c_val*5.0
     STEER_CHANGE_COST = c_val*1.5
     STEER_ANGLE_COST = c_val*1.2
     OBS_COST = c_val*5.0
@@ -344,8 +344,8 @@ class OccupancyGrid:
         # minimalna odległość na którą może sięgnąć czujnik
         min_range = params["min_range"]
         # rozwiązanie problemu, kiedy czujnik zwracał wartość mniejszą o amplitudę szumu
-        if dist >= max_range - 0.01:
-            effective_dist = max_range - 0.15
+        if dist >= max_range - 0.05:
+            effective_dist = max_range - 0.05
             is_hit = False # nie ma wskazania, bo czujnik zwraca domyślnie tą wartość
         else:
             # jeżeli wykryto że odległość wskazana przez czujnik jest mniejsza niż maksymalna - szum, to daj zielone na przeszkodę
@@ -733,12 +733,13 @@ class Path:
         self.K_e = 1.0
         self.segments = []
         
+        
 
         self.active_segment = 0
         self.segment_hold = True
         self.changed = False
 
-        self.ind_la = 0.0
+        self.ind_la = 0
         start = 0
         for i in range(1, len(self.directions)):
             if self.directions[i] != self.directions[i-1]:
@@ -746,13 +747,17 @@ class Path:
                 start = i
 
         self.segments.append((start, len(self.directions)-1))
-        
+
     # Metody pomocnicze:
     def __len__(self):          # len(path)
         return len(self.xs)
     def get_point(self, idx):
         return (self.xs[idx], self.ys[idx], self.yaws[idx])
-    
+    def reset_runtime_state(self):
+        self.active_segment = 0
+        self.segment_hold = True
+        self.changed = False
+        self.last_ind = 0
     # po to żeby śledzić odcinki długości   
     def _build_len_s(self):
         if len(self.xs) == 0:
@@ -761,6 +766,8 @@ class Path:
         for i in range(1, len(self.xs)):
             ds = np.hypot(self.xs[i]-self.xs[i-1], self.ys[i]-self.ys[i-1])
             s.append(s[-1] + ds)
+            
+        self.goal = np.array([self.xs[-1], self.ys[-1], self.yaws[-1]])
         return s
     
     def calc_theta_e_and_er(self, x,y,yaw):
@@ -778,8 +785,8 @@ class Path:
         #ind += 5
         k = self.curvs[ind]
         path_yaw = self.yaws[ind]
-        if self.directions[ind] < 0:
-            path_yaw = mod2pi(path_yaw + np.pi)
+        # if self.directions[ind] < 0:
+        #     path_yaw = mod2pi(path_yaw + np.pi)
         rear_axle_vec_rot_90 = np.array([[math.cos(path_yaw + math.pi / 2.0)],
                                          [math.sin(path_yaw + math.pi / 2.0)]])
 
@@ -995,11 +1002,11 @@ def resample_and_smooth_path(path:Path, ds=0.01):
     dy = np.gradient(y_all, ds)
     yaw = np.arctan2(dy, dx)
     yaw = np.unwrap(yaw)
-    yaw_corrected = yaw.copy()
-    for i in range(len(yaw_corrected)):
-        if dir_all[i] < 0:
-            yaw_corrected[i] = yaw_corrected[i] + np.pi
-    yaw = yaw_corrected
+    # yaw_corrected = yaw.copy()
+    # for i in range(len(yaw_corrected)):
+    #     if dir_all[i] < 0:
+    #         yaw_corrected[i] = yaw_corrected[i] + np.pi
+    # yaw = yaw_corrected
     
     kappa = kappa_all
     
