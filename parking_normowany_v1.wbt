@@ -1,0 +1,2414 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/Road.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/Crossroad.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/RoadLine.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/trees/protos/SimpleTree.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/bmw/BmwX5Simple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/citroen/CitroenCZeroSimple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/lincoln/LincolnMKZSimple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/range_rover/RangeRoverSportSVRSimple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/toyota/ToyotaPriusSimple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/tesla/TeslaModel3Simple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/traffic/protos/PedestrianCrossing.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/bmw/BmwX5.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/balls/protos/FifaSoccerBall.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/Floor.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/street_furniture/protos/UrbanFence.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/traffic/protos/ParkingLines.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/mercedes_benz/MercedesBenzSprinterSimple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/street_furniture/protos/TrashContainer.proto"
+
+WorldInfo {
+  info [
+    ""
+    "World generated using the Open Street Map to Webots importer"
+    "Author: David Mansolino <david.mansolino@epfl.ch>"
+  ]
+  CFM 1e-07
+  ERP 0.001
+  basicTimeStep 4
+  FPS 30
+  physicsDisableLinearThreshold 0.02
+  physicsDisableAngularThreshold 0.02
+  gpsReference 52.218335499999995 20.9844915 0
+  lineScale 1
+  dragForceScale 37
+  dragTorqueScale 8
+  contactProperties [
+    ContactProperties {
+      coulombFriction [
+        8
+      ]
+      bounce 0.3
+      softERP 0.001
+      softCFM 1e-09
+      bumpSound ""
+      rollSound ""
+      slideSound ""
+    }
+  ]
+}
+Viewpoint {
+  fieldOfView 1.57
+  orientation -0.4796339051176135 0.1892770391958394 0.8568112507984968 2.6558748998494113
+  position 116.10196615225085 -25.166143453533703 13.84860986222169
+  near 0.35
+  follow "SAMOCHOD_TESTOWY"
+  followType "Mounted Shot"
+  ambientOcclusionRadius 10
+}
+TexturedBackground {
+}
+TexturedBackgroundLight {
+}
+Solid {
+  translation 49 0 -0.02
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/default/worlds/textures/grass.jpg"
+          ]
+        }
+        roughness 1
+        IBLStrength 0
+      }
+      geometry IndexedFaceSet {
+        coord Coordinate {
+          point [
+            -125 -69.5 0
+            194 -95 0
+            -125 69.5 0
+            150 69.5 0
+          ]
+        }
+        texCoord TextureCoordinate {
+          point [
+            0 0
+            500 0
+            0 278
+            500 278
+          ]
+        }
+        coordIndex [
+          2, 0, 1, 3, -1
+        ]
+        texCoordIndex [
+          2, 0, 1, 3, -1
+        ]
+      }
+    }
+  ]
+  name "floor"
+  model "floor"
+  boundingObject Plane {
+    size 250 139
+  }
+  locked TRUE
+  recognitionColors [
+    0.411765 0.411765 0.411765
+  ]
+}
+Crossroad {
+  translation 31.477155 15.241883 0.01
+  name "crossroad(1)"
+  id "1619167251"
+  shape [
+    3.493054 2.190565 0
+    -2.051253 -3.576641 0
+    -11.666885 3.177709 0
+    -15.224926 5.878168 0
+    -15.555603 6.14489 0
+    -10.550761 13.980006 0
+    -2.577918 14.638619 0
+    3.493054 2.190565 0
+  ]
+  connectedRoadIDs [
+    "1136436938"
+    "382576379"
+    "382576382"
+  ]
+}
+Crossroad {
+  translation -50.229521 -19.354324 0.01
+  name "Plac Narutowicza 15"
+  id "3035843800"
+  shape []
+  connectedRoadIDs [
+    "243382592"
+    "328281736"
+  ]
+}
+Crossroad {
+  translation -74.284518 -22.930384 0.01
+  name "crossroad(2)"
+  id "33207680"
+  shape [
+    5.776236 3.193368 0
+    5.192931 -0.771991 0
+    4.604747 -4.728509 0
+    -5.781114 -3.184528 0
+    -4.611976 4.72146 0
+    5.776236 3.193368 0
+  ]
+  connectedRoadIDs [
+    "243382592"
+    "331318700"
+    "842130333"
+  ]
+}
+Crossroad {
+  translation 16.125477 42.417849 0.01
+  name "crossroad(3)"
+  id "3857814264"
+  shape [
+    14.62563 -1.352781 0
+    9.60307 -7.579649 0
+    -1.060417 -6.514447 0
+    -5.999327 2.751467 0
+    -2.466659 4.634446 0
+    9.009112 10.742364 0
+    13.942431 1.473472 0
+    14.62563 -1.352781 0
+  ]
+  connectedRoadIDs [
+    "1020404154_1"
+    "1020404154_2"
+    "382576382"
+  ]
+}
+Crossroad {
+  translation 3.789594 19.240756 0.01
+  name "crossroad(4)"
+  id "54091476"
+  shape [
+    6.027563 -2.689048 0
+    1.353819 -9.645036 0
+    -6.644751 -9.493775 0
+    -11.294176 -0.063952 0
+    0.992742 6.525103 0
+    6.027563 -2.689048 0
+  ]
+  connectedRoadIDs [
+    "1020404154_1"
+    "243382591"
+    "382576379"
+  ]
+}
+Crossroad {
+  translation 45.513071 0.634885 0.01
+  name "crossroad(5)"
+  id "54094009"
+  shape [
+    5.656139 0.089978 0
+    0.089978 -5.656139 0
+    -3.885143 -2.214873 0
+    -5.655673 -0.115589 0
+    -0.115589 5.655673 0
+    3.984401 2.030898 0
+    5.656139 0.089978 0
+  ]
+  connectedRoadIDs [
+    "1136436938"
+    "6977318"
+    "6977320_1"
+    "6977359"
+  ]
+}
+Crossroad {
+  translation -38.499189 -17.466079 0.01
+  name "crossroad(6)"
+  id "54094051"
+  shape []
+  connectedRoadIDs [
+    "1020404155"
+    "328281736"
+  ]
+}
+Crossroad {
+  translation -68.829646 -38.759231 0.01
+  name "crossroad(7)"
+  id "7856489228"
+  shape [
+    4.312005 -0.452811 0
+    3.30627 -3.96362 0
+    -1.6905 -3.90297 0
+    -4.09089 0.95176 0
+    -1.792045 4.225181 0
+    3.12237 3.36619 0
+    4.41201 -0.452811 0
+  ]
+  connectedRoadIDs [
+    "6977320_3"
+    "842130333"
+    "842130334"
+  ]
+}
+Crossroad {
+  translation 18.608382 -40.569134 0.01
+  name "crossroad(8)"
+  id "7856489300"
+  shape []
+  connectedRoadIDs [
+    "842130343"
+    "842130344"
+  ]
+}
+Crossroad {
+  translation 29.381875 -7.904019 0.01
+  name "crossroad(11)"
+  id "7859021306"
+  shape []
+  connectedRoadIDs [
+    "842425176"
+    "842425177"
+  ]
+}
+Crossroad {
+  translation -23.119943 -11.76352 0.01
+  name "crossroad(12)"
+  id "8322553597"
+  shape []
+  connectedRoadIDs [
+    "1020404155"
+    "243382591"
+  ]
+}
+Road {
+  translation 98.069125 108.870522 0.01
+  name "Akademicka"
+  id "6977318"
+  endJunction "54094009"
+  width 6
+  numberOfForwardLanes 0
+  speedLimit 13.888889
+  lines []
+  roadBorderHeight 0.01
+  leftBarrier TRUE
+  wayPoints [
+    0 0 0
+    -1.485014 -13.313585 0
+    -2.073588 -18.796962 0
+    -3.871523 -25.236655 0
+    -4.904041 -30.174933 0
+    -6.326156 -36.1253 0
+    -7.25596 -39.806732 0
+    -8.254106 -43.6105 0
+    -10.010783 -48.593126 0
+    -12.505625 -55.388606 0
+    -15.205113 -60.626866 0
+    -17.521955 -65.431415 0
+    -19.271502 -68.823492 0
+    -22.743114 -74.784571 0
+    -24.909396 -78.187686 0
+    -27.444659 -81.957776 0
+    -31.141592 -87.218073 0
+    -34.182453 -91.24388 0
+    -37.291596 -95.080585 0
+    -45.948994 -103.821274 0
+    -49.021939 -105.874395 0
+  ]
+  endingAngle [
+    -3.855131
+  ]
+  endLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+  ]
+  splineSubdivision 0
+}
+PedestrianCrossing {
+  translation 96.584111 95.556937 -0.07
+  rotation 0 0 1 3.034664
+  name "pedestrian crossing(1)"
+  size 4 1.6
+  enableBoundingObject FALSE
+}
+PedestrianCrossing {
+  translation 78.797623 40.047029 -0.07
+  rotation 0 0 1 2.61423
+  name "pedestrian crossing(2)"
+  size 4 1.6
+  enableBoundingObject FALSE
+}
+UrbanFence {
+  translation 47.0891 -16.0609 -0.01
+  rotation 0 0 1 0.785398
+}
+UrbanFence {
+  translation 48.1781 -17.1499 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(5)"
+}
+UrbanFence {
+  translation 49.2713 -18.2419 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(6)"
+}
+UrbanFence {
+  translation 50.3742 -19.3448 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(7)"
+}
+UrbanFence {
+  translation 51.4702 -20.4408 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(8)"
+}
+UrbanFence {
+  translation 52.5736 -21.5442 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(9)"
+}
+UrbanFence {
+  translation 53.6766 -22.6472 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(10)"
+}
+UrbanFence {
+  translation 54.7727 -23.7433 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(11)"
+}
+UrbanFence {
+  translation 55.8758 -24.8464 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(12)"
+}
+UrbanFence {
+  translation 56.9717 -25.9423 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(13)"
+}
+UrbanFence {
+  translation 58.068 -27.0386 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(14)"
+}
+UrbanFence {
+  translation 59.164 -28.1346 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(15)"
+}
+UrbanFence {
+  translation 60.26 -29.2306 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(16)"
+}
+UrbanFence {
+  translation 61.3633 -30.3339 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(17)"
+}
+UrbanFence {
+  translation 62.4664 -31.437 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(18)"
+}
+UrbanFence {
+  translation 63.5696 -32.5402 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(19)"
+}
+UrbanFence {
+  translation 64.6655 -33.6361 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(20)"
+}
+UrbanFence {
+  translation 65.7687 -34.7393 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(21)"
+}
+UrbanFence {
+  translation 66.8648 -35.8354 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(22)"
+}
+UrbanFence {
+  translation 67.9534 -36.924 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(23)"
+}
+UrbanFence {
+  translation 69.0492 -38.0198 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(24)"
+}
+UrbanFence {
+  translation 70.1453 -39.1159 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(25)"
+}
+UrbanFence {
+  translation 71.2414 -40.212 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(4)"
+}
+UrbanFence {
+  translation 72.3374 -41.308 -0.01
+  rotation 0 0 1 0.785398
+  name "urban fence(29)"
+}
+UrbanFence {
+  translation 47.0823 -14.9785 -0.01
+  rotation 0 0 1 -0.785395307179586
+  name "urban fence(1)"
+}
+UrbanFence {
+  translation 73.4085 -41.3045 -0.01
+  rotation 0 0 1 -0.785395307179586
+  name "urban fence(26)"
+}
+UrbanFence {
+  translation 74.4905 -40.2225 -0.01
+  rotation 0 0 1 -0.785395307179586
+  name "urban fence(27)"
+}
+UrbanFence {
+  translation 75.5727 -39.1401 -0.01
+  rotation 0 0 1 -0.785395307179586
+  name "urban fence(28)"
+}
+UrbanFence {
+  translation 48.1787 -13.8821 -0.01
+  rotation 0 0 1 -0.785395307179586
+  name "urban fence(2)"
+}
+UrbanFence {
+  translation 53.6226 16.0287 -0.01
+  rotation 0 0 1 -0.785395307179586
+  name "urban fence(30)"
+}
+UrbanFence {
+  translation 54.7188 17.1249 -0.01
+  rotation 0 0 1 -0.785395307179586
+  name "urban fence(31)"
+}
+UrbanFence {
+  translation 55.829 18.2351 -0.01
+  rotation 0 0 1 -0.785395307179586
+  name "urban fence(32)"
+}
+UrbanFence {
+  translation 56.8741 19.4205 -0.01
+  rotation 0 0 -1 0.66
+  name "urban fence(33)"
+}
+UrbanFence {
+  translation 57.8298 20.6529 -0.01
+  rotation 0 0 -1 0.66
+  name "urban fence(34)"
+}
+UrbanFence {
+  translation 58.7925 21.8932 -0.01
+  rotation 0 0 -1 0.66
+  name "urban fence(35)"
+}
+UrbanFence {
+  translation 59.7432 23.1177 -0.01
+  rotation 0 0 -1 0.66
+  name "urban fence(36)"
+}
+UrbanFence {
+  translation 60.7054 24.358 -0.01
+  rotation 0 0 -1 0.66
+  name "urban fence(37)"
+}
+UrbanFence {
+  translation 61.6388 25.5919 -0.01
+  rotation 0 0 -1 0.63
+  name "urban fence(38)"
+}
+UrbanFence {
+  translation 62.5524 26.8445 -0.01
+  rotation 0 0 -1 0.63
+  name "urban fence(39)"
+}
+UrbanFence {
+  translation 63.4713 28.1049 -0.01
+  rotation 0 0 -1 0.63
+  name "urban fence(40)"
+}
+UrbanFence {
+  translation 64.4022 29.3815 -0.01
+  rotation 0 0 -1 0.63
+  name "urban fence(41)"
+}
+UrbanFence {
+  translation 65.3219 30.6416 -0.01
+  rotation 0 0 -1 0.63
+  name "urban fence(42)"
+}
+UrbanFence {
+  translation 66.2468 31.91 -0.01
+  rotation 0 0 -1 0.63
+  name "urban fence(43)"
+}
+UrbanFence {
+  translation 67.1603 33.1622 -0.01
+  rotation 0 0 -1 0.63
+  name "urban fence(44)"
+}
+UrbanFence {
+  translation 68.0738 34.4146 -0.01
+  rotation 0 0 -1 0.63
+  name "urban fence(45)"
+}
+UrbanFence {
+  translation 68.8839 35.6879 -0.01
+  rotation 0 0 -1 0.49910030610042533
+  name "urban fence(3)"
+}
+UrbanFence {
+  translation 69.621 37.0395 -0.01
+  rotation 0 0 -1 0.49910030610042533
+  name "urban fence(46)"
+}
+UrbanFence {
+  translation 70.3673 38.4091 -0.01
+  rotation 0 0 -1 0.49910030610042533
+  name "urban fence(47)"
+}
+UrbanFence {
+  translation 71.1041 39.7612 -0.01
+  rotation 0 0 -1 0.49910030610042533
+  name "urban fence(48)"
+}
+UrbanFence {
+  translation 71.8586 41.1032 -0.01
+  rotation 0 0 -1 0.52
+  name "urban fence(49)"
+}
+UrbanFence {
+  translation 72.6288 42.449 -0.01
+  rotation 0 0 -1 0.52
+  name "urban fence(50)"
+}
+UrbanFence {
+  translation 73.4043 43.8025 -0.01
+  rotation 0 0 -1 0.52
+  name "urban fence(51)"
+}
+UrbanFence {
+  translation 74.1742 45.1478 -0.01
+  rotation 0 0 -1 0.52
+  name "urban fence(52)"
+}
+UrbanFence {
+  translation 74.9097 46.5321 -0.01
+  rotation 0 0 -1 0.46
+  name "urban fence(53)"
+}
+UrbanFence {
+  translation 75.5991 47.9172 -0.01
+  rotation 0 0 -1 0.46
+  name "urban fence(54)"
+}
+UrbanFence {
+  translation 76.2834 49.2965 -0.01
+  rotation 0 0 -1 0.46
+  name "urban fence(55)"
+}
+Road {
+  translation -23.119943 -11.76352 0.01
+  name "Plac Gabriela Narutowicza"
+  id "243382591"
+  startJunction "8322553597"
+  endJunction "54091476"
+  width 10.5
+  numberOfLanes 3
+  numberOfForwardLanes 3
+  speedLimit 13.888889
+  lines [
+    RoadLine {
+    }
+    RoadLine {
+    }
+  ]
+  rightBarrier TRUE
+  leftBarrier TRUE
+  wayPoints [
+    0 0 0
+    3.327412 1.890133 0
+    6.19713 3.902717 0
+    9.640847 6.593663 0
+    12.326188 8.984462 0
+    14.540109 11.208524 0
+    16.555948 13.59947 0
+    18.339505 15.968221 0
+    20.273468 18.859708 0
+    24.99151 27.494124 0
+  ]
+  startingAngle [
+    -0.516595
+  ]
+  endingAngle [
+    -1.070704
+  ]
+  endLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+  ]
+  splineSubdivision 5
+  roadBoundingObject TRUE
+  rightBorderBoundingObject TRUE
+  leftBorderBoundingObject TRUE
+}
+Road {
+  translation -70.327999 -22.342201 0.01
+  name "Plac Gabriela Narutowicza(10)"
+  id "243382592"
+  startJunction "33207680"
+  endJunction "3035843800"
+  width 10.5
+  numberOfLanes 3
+  numberOfForwardLanes 3
+  speedLimit 13.888889
+  lines [
+    RoadLine {
+    }
+    RoadLine {
+    }
+  ]
+  rightBarrier TRUE
+  leftBarrier TRUE
+  wayPoints [
+    0 0 0
+    20.098479 2.987877 0
+  ]
+  startingAngle [
+    -0.147581
+  ]
+  endingAngle [
+    -0.137534
+  ]
+  startLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+  ]
+  splineSubdivision 0
+  locked FALSE
+  rightBorderBoundingObject TRUE
+  leftBorderBoundingObject TRUE
+}
+Road {
+  translation -50.229521 -19.354324 0.01
+  name "Plac Gabriela Narutowicza(2)"
+  id "328281736"
+  startJunction "3035843800"
+  endJunction "54094051"
+  width 10.5
+  numberOfLanes 3
+  numberOfForwardLanes 3
+  speedLimit 13.888889
+  lines [
+    RoadLine {
+    }
+    RoadLine {
+    }
+  ]
+  rightBarrier TRUE
+  leftBarrier TRUE
+  wayPoints [
+    0 0 0
+    6.579065 0.910592 0
+    11.730332 1.888244 0
+  ]
+  startingAngle [
+    -0.137534
+  ]
+  endingAngle [
+    -0.223493
+  ]
+  splineSubdivision 0
+}
+Road {
+  translation 13.358999 21.886223 0.01
+  name "Plac Gabriela Narutowicza(4)"
+  id "382576379"
+  startJunction "54091476"
+  endJunction "1619167251"
+  width 8
+  numberOfForwardLanes 2
+  speedLimit 13.888889
+  wayPoints [
+    0 0 0
+    2.311278 0.043709 0
+    3.808843 -0.080001 0
+  ]
+  startingAngle [
+    -0.018909
+  ]
+  endingAngle [
+    0.08242
+  ]
+  startLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+  ]
+  endLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+  ]
+  splineSubdivision 0
+}
+PedestrianCrossing {
+  translation 19.045017 21.651154 -0.07
+  rotation 0 0 1 1.324701
+  name "pedestrian crossing(9)"
+  size 8 3.2
+}
+Road {
+  translation 21.940685 28.631044 0.01
+  name "Plac Gabriela Narutowicza(5)"
+  id "382576382"
+  startJunction "1619167251"
+  endJunction "3857814264"
+  width 8
+  numberOfForwardLanes 2
+  speedLimit 13.888889
+  wayPoints [
+    0 0 0
+    -1.348993 1.672454 0
+  ]
+  startingAngle [
+    -2.139237
+  ]
+  endingAngle [
+    -2.249546
+  ]
+  startLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+  ]
+  endLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+  ]
+  splineSubdivision 0
+}
+PedestrianCrossing {
+  translation 22.4485 28.0015 -0.1
+  rotation 0 0 1 0.678749
+  name "pedestrian crossing(10)"
+  size 8 3.2
+}
+Road {
+  translation -71.418116 -35.817762 0.01
+  name "Akademicka(1)"
+  id "842130333"
+  startJunction "7856489228"
+  endJunction "33207680"
+  width 5
+  numberOfLanes 1
+  numberOfForwardLanes 0
+  speedLimit 13.888889
+  lines []
+  wayPoints [
+    0 0 0
+    -0.293723 0.418244 0
+    -0.969426 3.176828 0
+    -1.858795 7.729474 0
+  ]
+  startingAngle [
+    -2.183049
+  ]
+  endingAngle [
+    -1.718377
+  ]
+  startLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+  ]
+  endLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+  ]
+  splineSubdivision 0
+  rightBorderBoundingObject TRUE
+  leftBorderBoundingObject TRUE
+}
+PedestrianCrossing {
+  translation -72.3875 -32.6409 -0.18
+  rotation 0 0 1 0.192922
+  name "pedestrian crossing(11)"
+  size 4 1.6
+}
+Road {
+  translation -72.0985 -53.3181 0.01
+  name "road(1)"
+  id "842130334"
+  endJunction "7856489228"
+  width 4
+  numberOfLanes 1
+  speedLimit 13.888889
+  lines []
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [
+    0 0 0
+    0.821198 6.117297 0
+    1.252172 8.653174 0
+    1.806032 10.821973 0
+    1.812171 10.841681 0
+  ]
+  endingAngle [
+    -1.268818
+  ]
+  endLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+  ]
+  splineSubdivision 0
+}
+Road {
+  translation 29.533093 -8.055417 0.01
+  name "road(5)"
+  id "842425177"
+  startJunction "7859021305"
+  endJunction "7859021306"
+  width 4
+  numberOfLanes 1
+  speedLimit 13.888889
+  lines []
+  rightBorder FALSE
+  leftBorder FALSE
+  wayPoints [
+    0 0 0
+    -0.151218 0.151397 0
+  ]
+  startingAngle [
+    -2.355601
+  ]
+  endingAngle [
+    -2.355601
+  ]
+  startLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+  ]
+  splineSubdivision 0
+}
+Road {
+  translation -38.499189 -17.466079 0.01
+  name "Plac Gabriela Narutowicza(6)"
+  id "1020404155"
+  startJunction "54094051"
+  endJunction "8322553597"
+  width 10.5
+  numberOfLanes 3
+  numberOfForwardLanes 3
+  speedLimit 13.888889
+  lines [
+    RoadLine {
+    }
+    RoadLine {
+    }
+  ]
+  rightBarrier TRUE
+  leftBarrier TRUE
+  wayPoints [
+    0 0 0
+    3.764417 0.855615 0
+    6.968659 1.800337 0
+    12.393471 4.079298 0
+    15.379246 5.702559 0
+  ]
+  startingAngle [
+    -0.223493
+  ]
+  endingAngle [
+    -0.516595
+  ]
+  splineSubdivision 0
+}
+Road {
+  translation 32.170193 14.520982 0.01
+  name "Plac Gabriela Narutowicza(7)"
+  id "1136436938"
+  startJunction "1619167251"
+  endJunction "54094009"
+  width 8
+  speedLimit 13.888889
+  lines [
+    RoadLine {
+      type "continuous"
+    }
+  ]
+  wayPoints [
+    0 0 0
+    8.889625 -9.247018 0
+    10.572836 -11.000466 0
+  ]
+  startingAngle [
+    0.805101
+  ]
+  endingAngle [
+    0.805833
+  ]
+  startLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+  ]
+  endLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+  ]
+  splineSubdivision 0
+}
+PedestrianCrossing {
+  translation 41.0598 5.27396 -0.18
+  rotation 0 0 1 0.764963
+  name "pedestrian crossing(12)"
+  size 8 3.2
+}
+Road {
+  translation 8.564564 28.212139 0.01
+  name "Plac Gabriela Narutowicza(8)"
+  id "1020404154_1"
+  startJunction "54091476"
+  endJunction "3857814264"
+  width 10.5
+  numberOfLanes 3
+  numberOfForwardLanes 3
+  speedLimit 13.888889
+  lines [
+    RoadLine {
+    }
+    RoadLine {
+    }
+  ]
+  wayPoints [
+    0 0 0
+    1.452995 2.729938 0
+  ]
+  startingAngle [
+    -1.11272
+  ]
+  endingAngle [
+    -1.081687
+  ]
+  startLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_dashed.png"
+  ]
+  endLine [
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/road/protos/textures/road_line_triangle.png"
+  ]
+  splineSubdivision 0
+}
+FifaSoccerBall {
+  hidden linearVelocity_0 0 0 -1246.8902399997796
+  translation -241469997528.69 327951144796.27893 498164698727.41895
+  rotation 0.7914649081469312 0.1908917062017939 -0.5806407285708934 -2.7921153862066475
+}
+SimpleTree {
+  translation -68.01 41.56 0
+  rotation 0 0 1 5.091
+  name "tree(10)"
+  type "random"
+  enableBoundingObject FALSE
+}
+Pose {
+  translation 82.1343 -42.7229 -0.017
+  rotation 0 0 1 2.3562
+  children [
+    Pose {
+      translation 25.66 2.6 0
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColorMap ImageTexture {
+              url [
+                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/traffic/protos/textures/parking_lines.png"
+              ]
+              repeatT FALSE
+            }
+            roughness 1
+            metalness 0
+            textureTransform TextureTransform {
+              scale 14 1
+            }
+          }
+          geometry Plane {
+            size 36 5.2
+          }
+          castShadows FALSE
+        }
+      ]
+    }
+  ]
+}
+Pose {
+  translation 120.279 -55.9006 -0.021
+  rotation 0.00049999982000009 -0.0007999997120001439 0.9999995550002214 0.785398
+  children [
+    TeslaModel3Simple {
+      translation 13.74 54.86 0.36
+      rotation 0 0 1 1.5708
+      name "vehicle(34)"
+    }
+    TeslaModel3Simple {
+      translation 2.2302 14.97 0.28
+      rotation 0 0 -1 -5.307179586466759e-06
+      name "vehicle(5)"
+    }
+    BmwX5Simple {
+      translation 2.03 18.75 0.36
+      name "vehicle(25)"
+    }
+    BmwX5Simple {
+      translation 2.02 53.34 0.37
+      name "vehicle(3)"
+    }
+    BmwX5Simple {
+      translation 2.38 32.49 0.33
+      name "vehicle(4)"
+    }
+    BmwX5Simple {
+      translation 2.36 38.66 0.41
+      name "vehicle(35)"
+    }
+    BmwX5Simple {
+      translation 13.5745 33.799 0.37
+      rotation 0 0 1 1.47
+      name "vehicle(26)"
+    }
+    ToyotaPriusSimple {
+      translation 13.55 22.17 0.33
+      rotation 0 0 1 1.5708
+      name "vehicle(24)"
+    }
+    ToyotaPriusSimple {
+      translation 2.25 22.63 0.32
+      rotation 0 0 -1 -5.307179586466759e-06
+      name "vehicle(29)"
+    }
+    ToyotaPriusSimple {
+      translation 13.56 39.27 0.31
+      rotation 0 0 1 1.5708
+      name "vehicle(27)"
+    }
+    ToyotaPriusSimple {
+      translation 5.25 35.9 0.3
+      rotation 0 0 1 -3.1415853071795863
+      name "vehicle(33)"
+    }
+    ToyotaPriusSimple {
+      translation 5.21999 47.42 0.32
+      rotation 0 0 1 -3.1415853071795863
+      name "vehicle(1)"
+    }
+    TrashContainer {
+      translation 4.33065 42.9072 0
+      rotation 0 0 1 -0.523595307179586
+    }
+    RangeRoverSportSVRSimple {
+      translation 13.7 5.94004 0.39
+      rotation 0 0 1 1.5708
+      name "vehicle(13)"
+    }
+    LincolnMKZSimple {
+      translation 2.1 9.19 0.34
+      name "vehicle(11)"
+    }
+    LincolnMKZSimple {
+      translation 2.24474 26.7186 0.34
+      rotation 0 0 1 0.1
+      name "vehicle(30)"
+    }
+    LincolnMKZSimple {
+      translation 2.18744 50.2769 0.35
+      rotation 0 0 -1 0
+      name "vehicle(2)"
+    }
+    LincolnMKZSimple {
+      translation 13.53 12.12 0.39
+      rotation 0 0 1 1.5708
+      name "vehicle(12)"
+    }
+    LincolnMKZSimple {
+      translation 13.7336 45.9945 0.36
+      rotation 0 0 1 1.62
+      name "vehicle(28)"
+    }
+    CitroenCZeroSimple {
+      translation 1.99 6.25 0.28
+      name "vehicle(9)"
+    }
+    Pose {
+      translation 6.18 4.66002 0.02
+      rotation 0 0 1 1.5708
+      children [
+        Pose {
+          translation 25 2.6 0
+          children [
+            Shape {
+              appearance PBRAppearance {
+                baseColorMap ImageTexture {
+                  url [
+                    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/traffic/protos/textures/parking_lines.png"
+                  ]
+                  repeatT FALSE
+                }
+                roughness 1
+                metalness 0
+                textureTransform TextureTransform {
+                  scale 17 1
+                }
+              }
+              geometry Plane {
+                size 50 5.2
+              }
+              castShadows FALSE
+            }
+          ]
+        }
+      ]
+    }
+    Pose {
+      translation 40.55 4.66004 0.002
+      rotation 0 0 1 1.5708
+      children [
+        Pose {
+          translation 25 2.6 0
+          children [
+            Shape {
+              appearance PBRAppearance {
+                baseColorMap ImageTexture {
+                  url [
+                    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/traffic/protos/textures/parking_lines.png"
+                  ]
+                  repeatT FALSE
+                }
+                roughness 1
+                metalness 0
+                textureTransform TextureTransform {
+                  scale 20 1
+                }
+              }
+              geometry Plane {
+                size 50 5.2
+              }
+              castShadows FALSE
+            }
+          ]
+        }
+      ]
+    }
+    ParkingLines {
+      translation 14.86 4.66002 0.00674
+      rotation 0.0005899998973105268 0 0.9999998259500454 1.5699996938995748
+      numberOfCarParks 10
+      carParkLength 2.5
+      carParkWidth 5.5
+    }
+    Pose {
+      translation 24.27 4.66003 0.0065
+      rotation 0 0 1 1.5708
+      children [
+        UrbanFence {
+          translation 0.387567 -0.18699 -0.56
+          rotation 0 0 1 1.5708
+          name "urban fence(56)"
+        }
+        UrbanFence {
+          translation 1.96757 -0.186984 -0.56
+          rotation 0 0 1 1.5708
+          name "urban fence(59)"
+        }
+        UrbanFence {
+          translation 3.52757 -0.18698 -0.53
+          rotation 0 0 1 1.5708
+          name "urban fence(60)"
+        }
+        UrbanFence {
+          translation 5.13757 -0.186974 -0.52
+          rotation 0 0 1 1.5708
+          name "urban fence(61)"
+        }
+        UrbanFence {
+          translation 6.76757 -0.186971 -0.5
+          rotation 0 0 1 1.5708
+          name "urban fence(62)"
+        }
+        UrbanFence {
+          translation 8.36757 -0.186966 -0.53
+          rotation 0 0 1 1.5708
+          name "urban fence(63)"
+        }
+        UrbanFence {
+          translation 9.9976 -0.186962 -0.55
+          rotation 0 0 1 1.5708
+          name "urban fence(64)"
+        }
+        UrbanFence {
+          translation 11.5676 -0.18696 -0.57
+          rotation 0 0 1 1.5708
+          name "urban fence(65)"
+        }
+        UrbanFence {
+          translation 14.8176 -0.18695 -0.56
+          rotation 0 0 1 1.5708
+          name "urban fence(68)"
+        }
+        UrbanFence {
+          translation 16.4176 -0.186943 -0.56
+          rotation 0 0 1 1.5708
+          name "urban fence(69)"
+        }
+        UrbanFence {
+          translation 18.0876 -0.186937 -0.55
+          rotation 0 0 1 1.5708
+          name "urban fence(70)"
+        }
+        UrbanFence {
+          translation 19.7176 -0.186935 -0.55
+          rotation 0 0 1 1.5708
+          name "urban fence(71)"
+        }
+        UrbanFence {
+          translation 21.3176 -0.186929 -0.56
+          rotation 0 0 1 1.5708
+          name "urban fence(72)"
+        }
+        UrbanFence {
+          translation 22.9676 -0.186925 -0.57
+          rotation 0 0 1 1.5708
+          name "urban fence(73)"
+        }
+        UrbanFence {
+          translation 24.6476 -0.186924 -0.6
+          rotation 0 0 1 1.5708
+          name "urban fence(74)"
+        }
+        UrbanFence {
+          translation 26.2976 -0.186918 -0.6
+          rotation 0 0 1 1.5708
+          name "urban fence(75)"
+        }
+        UrbanFence {
+          translation 27.9176 -0.186916 -0.6
+          rotation 0 0 1 1.5708
+          name "urban fence(76)"
+        }
+        UrbanFence {
+          translation 29.5276 -0.16691 -0.56
+          rotation 0 0 1 1.5708
+          name "urban fence(77)"
+        }
+        UrbanFence {
+          translation 31.1276 -0.186908 -0.58
+          rotation 0 0 1 1.5708
+          name "urban fence(78)"
+        }
+        UrbanFence {
+          translation 32.7276 -0.186901 -0.58
+          rotation 0 0 1 1.5708
+          name "urban fence(79)"
+        }
+        UrbanFence {
+          translation 34.3976 -0.186897 -0.59
+          rotation 0 0 1 1.5708
+          name "urban fence(80)"
+        }
+        UrbanFence {
+          translation 36.0576 -0.186893 -0.52
+          rotation 0 0 1 1.5708
+          name "urban fence(81)"
+        }
+        UrbanFence {
+          translation 37.7876 -0.186888 -0.54
+          rotation 0 0 1 1.5708
+          name "urban fence(82)"
+        }
+        UrbanFence {
+          translation 39.4076 -0.186883 -0.5
+          rotation 0 0 1 1.5708
+          name "urban fence(83)"
+        }
+        UrbanFence {
+          translation 41.0476 -0.186883 -0.52
+          rotation 0 0 1 1.5708
+          name "urban fence(84)"
+        }
+        UrbanFence {
+          translation 42.7476 -0.186881 -0.53
+          rotation 0 0 1 1.5708
+          name "urban fence(85)"
+        }
+        UrbanFence {
+          translation 44.3176 -0.186874 -0.54
+          rotation 0 0 1 1.5708
+          name "urban fence(86)"
+        }
+        UrbanFence {
+          translation 46.0376 -0.186872 -0.55
+          rotation 0 0 1 1.5708
+          name "urban fence(87)"
+        }
+        UrbanFence {
+          translation 47.7176 -0.18687 -0.61
+          rotation 0 0 1 1.5708
+          name "urban fence(88)"
+        }
+        UrbanFence {
+          translation 49.3976 -0.186869 -0.56
+          rotation 0 0 1 1.5708
+          name "urban fence(89)"
+        }
+        UrbanFence {
+          translation 51.0376 -0.186867 -0.56
+          rotation 0 0 1 1.5708
+          name "urban fence(90)"
+        }
+        UrbanFence {
+          translation 52.7576 -0.186864 -0.57
+          rotation 0 0 1 1.5708
+          name "urban fence(91)"
+        }
+        UrbanFence {
+          translation 54.3776 -0.186858 -0.6
+          rotation 0 0 1 1.5708
+          name "urban fence(92)"
+        }
+        UrbanFence {
+          translation 55.1276 0.613144 -0.01
+          rotation 0 0 1 -3.1415853071795863
+          name "urban fence(93)"
+        }
+        UrbanFence {
+          translation 55.1276 2.16314 -0.01
+          rotation 0 0 1 -3.1415853071795863
+          name "urban fence(94)"
+        }
+        UrbanFence {
+          translation 13.2176 -0.186957 -0.57
+          rotation 0 0 1 1.5708
+          name "urban fence(67)"
+        }
+        UrbanFence {
+          translation -0.33243 0.62301 -0.01
+          rotation 0 0 -1 -5.307179586466759e-06
+          name "urban fence(57)"
+        }
+        UrbanFence {
+          translation -0.33244 2.18301 -0.01
+          rotation 0 0 -1 -5.307179586466759e-06
+          name "urban fence(58)"
+        }
+        TeslaModel3Simple {
+          translation 45.18 1.67 0.33
+          rotation 0 0 -1 -5.307179586466759e-06
+          name "vehicle(15)"
+        }
+        ToyotaPriusSimple {
+          translation 34.15 1.59003 0.3
+          rotation 0 0 -1 -5.307179586466759e-06
+          name "vehicle(14)"
+        }
+        CitroenCZeroSimple {
+          translation 24.1 1.62 0.25
+          name "vehicle(8)"
+        }
+        BmwX5Simple {
+          translation 17.7334 1.7566 0.35
+          name "vehicle(7)"
+        }
+        LincolnMKZSimple {
+          translation 12.2 1.69 0.35
+          rotation 0 0 -1 -5.307179586466759e-06
+          name "vehicle(6)"
+        }
+        MercedesBenzSprinterSimple {
+          translation 1.91 1.62 0.4
+        }
+        Pose {
+          translation 27.5 1.58 0
+          children [
+            Shape {
+              appearance PBRAppearance {
+                baseColorMap ImageTexture {
+                  url [
+                    "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/traffic/protos/textures/parking_lines.png"
+                  ]
+                  repeatT FALSE
+                }
+                roughness 1
+                metalness 0
+                textureTransform TextureTransform {
+                  scale 10 1
+                }
+              }
+              geometry Plane {
+                size 55 2.5
+              }
+              castShadows FALSE
+            }
+          ]
+        }
+      ]
+    }
+    Shape {
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/default/worlds/textures/asphalt.jpg"
+          ]
+        }
+        roughness 1
+        metalness 0
+        textureTransform TextureTransform {
+          rotation 2
+          scale 25 25
+        }
+      }
+      geometry IndexedFaceSet {
+        coord Coordinate {
+          point [
+            0 0 0.01
+            60 0 0
+            60 60 0
+            0 60 0
+            0 0 0
+          ]
+        }
+        coordIndex [
+          0, 1, 2, 3, -1
+        ]
+      }
+    }
+  ]
+}
+SimpleTree {
+  translation -64.24 19.68 0
+  rotation 0 0 1 5.668
+  name "tree(11)"
+  type "random"
+  enableBoundingObject FALSE
+}
+SimpleTree {
+  translation -56.07 30.63 0
+  rotation 0 0 1 1.949
+  name "tree(12)"
+  type "random"
+  enableBoundingObject FALSE
+}
+SimpleTree {
+  translation -49.69 24.24 0
+  rotation 0 0 1 4.586
+  name "tree(13)"
+  type "random"
+  enableBoundingObject FALSE
+}
+SimpleTree {
+  translation -29.28 34.93 0
+  rotation 0 0 1 5.648
+  name "tree(14)"
+  type "random"
+  enableBoundingObject FALSE
+}
+SimpleTree {
+  translation -24.11 39.88 0
+  rotation 0 0 1 4.298
+  name "tree(15)"
+  type "random"
+  enableBoundingObject FALSE
+}
+SimpleTree {
+  translation 44.33 10.4 0
+  rotation 0 0 1 2.967
+  name "tree(16)"
+  type "random"
+  enableBoundingObject FALSE
+}
+SimpleTree {
+  translation 31.49 6.81 0
+  rotation 0 0 1 0.633
+  name "tree(17)"
+  type "random"
+  enableBoundingObject FALSE
+}
+SimpleTree {
+  translation 37.54 17.23 0
+  rotation 0 0 1 2.728
+  name "tree(18)"
+  type "random"
+  enableBoundingObject FALSE
+}
+SimpleTree {
+  translation 24.85 13.09 0
+  rotation 0 0 1 3.838
+  name "tree(19)"
+  type "random"
+  enableBoundingObject FALSE
+}
+SimpleTree {
+  translation 58.46 3.12 0
+  rotation 0 0 1 5.737
+  name "tree(20)"
+  type "random"
+  enableBoundingObject FALSE
+}
+DEF parking Pose {
+  translation 87.620348 91.131853 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/default/worlds/textures/light_asphalt.jpg"
+          ]
+        }
+        roughness 1
+        metalness 0
+        textureTransform TextureTransform {
+          scale 47 47
+        }
+      }
+      geometry IndexedFaceSet {
+        coord Coordinate {
+          point [
+            0 0 -0.01
+            4.88 -0.63 -0.01
+            3.7 -8.68 -0.01
+            1.68 -17.16 -0.01
+            -1.65 -28.81 -0.01
+            -5.25 -38.11 -0.01
+            -9.92 -47.45 -0.01
+            -10.4 -47.15 -0.01
+            -14.34 -44.94 -0.01
+            -9.89 -35.99 -0.01
+            -7.21 -29.75 -0.01
+            -4.55 -22.04 -0.01
+            -1.22 -8.34 -0.01
+            0 0 -0.01
+          ]
+        }
+        ccw FALSE
+        coordIndex [
+          0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+          10, 11, 12, 13, -1
+        ]
+      }
+      castShadows FALSE
+    }
+  ]
+}
+DEF parking Pose {
+  translation 70.818794 42.161929 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/default/worlds/textures/light_asphalt.jpg"
+          ]
+        }
+        roughness 1
+        metalness 0
+        textureTransform TextureTransform {
+          scale 30 30
+        }
+      }
+      geometry IndexedFaceSet {
+        coord Coordinate {
+          point [
+            0 0 -0.01
+            3.66 -2.13 -0.01
+            4.57 -2.65 -0.01
+            -0.95 -11.42 -0.01
+            -7.25 -20.42 -0.01
+            -14.99 -29.86 -0.01
+            -16.1 -29 -0.01
+            -18.93 -26.64 -0.01
+            -8.75 -13.66 -0.01
+            -5.56 -9.32 -0.01
+            0 0 -0.01
+          ]
+        }
+        ccw FALSE
+        coordIndex [
+          0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+          10, -1
+        ]
+      }
+      castShadows FALSE
+    }
+  ]
+}
+DEF parking Pose {
+  translation 73.5 46.6 0.001
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/default/worlds/textures/light_asphalt.jpg"
+          ]
+        }
+        roughness 1
+        metalness 0
+        textureTransform TextureTransform {
+          scale 30 30
+        }
+      }
+      geometry IndexedFaceSet {
+        coord Coordinate {
+          point [
+            0 0 -0.01
+            3.66 -2.13 -0.01
+            4.57 -2.65 -0.01
+            -0.95 -11.42 -0.01
+            -7.25 -20.42 -0.01
+            -14.99 -29.86 -0.01
+            -16.1 -29 -0.01
+            -18.93 -26.64 -0.01
+            -8.75 -13.66 -0.01
+            -5.56 -9.32 -0.01
+            0 0 -0.01
+          ]
+        }
+        ccw FALSE
+        coordIndex [
+          0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+          10, -1
+        ]
+      }
+      castShadows FALSE
+    }
+  ]
+}
+DEF parking Pose {
+  translation 31.947066 8.167748 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/default/worlds/textures/light_asphalt.jpg"
+          ]
+        }
+        roughness 1
+        metalness 0
+        textureTransform TextureTransform {
+          scale 7 7
+        }
+      }
+      geometry IndexedFaceSet {
+        coord Coordinate {
+          point [
+            0 0 -0.01
+            -5.4 5.46 -0.01
+            -6.82 4.02 -0.01
+            -1.54 -1.36 -0.01
+            0 0 -0.01
+          ]
+        }
+        coordIndex [
+          0, 1, 2, 3, 4, -1
+        ]
+      }
+      castShadows FALSE
+    }
+  ]
+}
+DEF parking Pose {
+  translation 73.2545 26.311596 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/default/worlds/textures/light_asphalt.jpg"
+          ]
+        }
+        roughness 1
+        metalness 0
+        textureTransform TextureTransform {
+          scale 30 30
+        }
+      }
+      geometry IndexedFaceSet {
+        coord Coordinate {
+          point [
+            0 0 -0.01
+            4.81 7.47 -0.01
+            8.74 14.45 -0.01
+            12.13 20.94 -0.01
+            15.7 28.59 -0.01
+            17.54 27.74 -0.01
+            13.82 19.76 -0.01
+            10.5 13.45 -0.01
+            6.45 6.26 -0.01
+            1.72 -1.1 -0.01
+            0 0 -0.01
+          ]
+        }
+        ccw FALSE
+        coordIndex [
+          0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+          10, -1
+        ]
+      }
+      castShadows FALSE
+    }
+  ]
+}
+DEF parking Pose {
+  translation 60.462482 9.852564 0
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/default/worlds/textures/light_asphalt.jpg"
+          ]
+        }
+        roughness 1
+        metalness 0
+        textureTransform TextureTransform {
+          scale 14 14
+        }
+      }
+      geometry IndexedFaceSet {
+        coord Coordinate {
+          point [
+            0 0 -0.01
+            5.34 6.37 -0.01
+            9.97 12.27 -0.01
+            11.58 11 -0.01
+            6.74 4.81 -0.01
+            1.58 -1.35 -0.01
+            0 0 -0.01
+          ]
+        }
+        ccw FALSE
+        coordIndex [
+          0, 1, 2, 3, 4, 5, 6, -1
+        ]
+      }
+      castShadows FALSE
+    }
+  ]
+}
+BmwX5 {
+  hidden position_0_0 -2.849944617391897e-11
+  hidden position2_0_0 66.61250186640316
+  hidden position_0_1 -4.1733240946782635e-11
+  hidden position2_0_1 60.256876570645424
+  hidden position_0_2 70.37457370209574
+  hidden position_0_3 62.015083563503104
+  hidden linearVelocity_0 -0.00010003803288400131 0.00010088051354420827 0.004142045896959636
+  hidden angularVelocity_0 -0.00023570988419961952 -0.00023408279818652993 8.595587085097685e-09
+  hidden translation_1 0 0 0
+  hidden rotation_1 -2.3648268710552875e-06 0.9999999999943192 2.4018506265970757e-06 0.2771864532805072
+  hidden linearVelocity_1 -8.595715623882857e-05 8.65331693968778e-05 0.002688218525431563
+  hidden angularVelocity_1 -0.00023475901268417646 -0.00023315626934160432 8.54977313981202e-09
+  hidden translation_2 0 0 0
+  hidden rotation_2 -1.4491813417597553e-06 0.9999999999988487 -4.4980550176026603e-07 4.876717584241065
+  hidden linearVelocity_2 -8.595550125490062e-05 8.653145877490105e-05 0.0026912266557119857
+  hidden angularVelocity_2 -0.00023475494126584925 -0.00023315843001471114 8.522534799417046e-09
+  hidden translation_3 0 0 0
+  hidden rotation_3 0 -1 0 5.296854188521049
+  hidden linearVelocity_3 -8.493834358723008e-05 8.551896225739124e-05 0.003256207237948402
+  hidden angularVelocity_3 -0.00022864486704547997 -0.00022712365252062987 8.204491490466212e-09
+  hidden translation_4 0 0 0
+  hidden rotation_4 0 -1 0 4.0919243581535305
+  hidden linearVelocity_4 -8.494568146705409e-05 8.552626234076378e-05 0.0032592153678666917
+  hidden angularVelocity_4 -0.00022866422828142214 -0.00022714343301110168 8.205596794028844e-09
+  translation 113.74717063671011 -22.556795344559696 0.2787517342964669
+  rotation 0.0030349800060057172 -0.0012692284388558662 0.9999945889631269 2.347084829224509
+  color 0.654902 0.654902 0.654902
+  name "SAMOCHOD_TESTOWY"
+  controller "parking_parallel_new"
+  supervisor TRUE
+  sensorsSlotFront [
+    Camera {
+      translation -1.99788 -0.025 0.83506
+      rotation 0 1 0 0.2617989999999993
+      children [
+        Pose {
+        }
+      ]
+      name "camera_front_right"
+      boundingObject Cylinder {
+        height 0.1
+        radius 0.05
+      }
+      fieldOfView 1.74533
+      width 1280
+      height 720
+    }
+    Camera {
+      translation -1.99788 0.025 0.83506
+      rotation 0 1 0 0.2617989999999993
+      children [
+        Pose {
+        }
+      ]
+      name "camera_front_left"
+      boundingObject Cylinder {
+        height 0.1
+        radius 0.05
+      }
+      fieldOfView 1.309
+      width 1280
+      height 720
+    }
+    Camera {
+      translation 0.0211038 0 -0.115717
+      rotation 0 -1 0 -0.26182530717958663
+      children [
+        Pose {
+        }
+      ]
+      name "camera_front_bumper"
+      boundingObject Cylinder {
+        height 0.1
+        radius 0.05
+      }
+      translationStep 0.001
+      rotationStep 0.0872665
+      fieldOfView 2.79253
+      width 1920
+      height 1080
+      near 0.008
+    }
+    DistanceSensor {
+      translation -0.0321399 -0.307398 -0.27
+      rotation 0 0 -1 0.0872653
+      name "distance sensor front righter"
+      lookupTable [
+        0.15 4 0.003
+        5 0 0.003
+      ]
+      type "sonar"
+      numberOfRays 55
+      aperture 1.0472
+    }
+    DistanceSensor {
+      translation -0.0321399 0.307398 -0.27
+      rotation 0 0 -1 -0.08726530717958614
+      name "distance sensor front lefter"
+      rotationStep 0.0872665
+      lookupTable [
+        0.15 4 0.003
+        5 0 0.0003
+      ]
+      type "sonar"
+      numberOfRays 55
+      aperture 1.0472
+    }
+    DistanceSensor {
+      translation -0.261926 0.81069 -0.26
+      rotation 0 0 1 0.610799
+      name "distance sensor front left"
+      rotationStep 0.0872665
+      lookupTable [
+        0.15 4 0.003
+        5 0 0.003
+      ]
+      type "sonar"
+      numberOfRays 55
+      aperture 1.0472
+    }
+    DistanceSensor {
+      translation -0.334127 -0.865199 -0.411
+      rotation -2.4844999999999985e-08 3.2708699999999987e-09 -0.9999999999999997 1.57079
+      name "distance sensor right front side"
+      translationStep 0.001
+      lookupTable [
+        0.15 4 0.003
+        5 0 0.003
+      ]
+      type "sonar"
+      numberOfRays 60
+      aperture 0.523599
+      redColorSensitivity 0
+    }
+    DistanceSensor {
+      translation -0.261926 -0.81069 -0.26
+      rotation 0 0 -1 0.610799
+      name "distance sensor front right"
+      rotationStep 0.0872665
+      lookupTable [
+        0.15 4 0.003
+        5 0 0.003
+      ]
+      type "sonar"
+      numberOfRays 55
+      aperture 1.0472
+    }
+    DistanceSensor {
+      translation -0.334127 0.865199 -0.411
+      rotation -2.484499999999999e-08 3.270869999999999e-09 -0.9999999999999997 -1.57079
+      name "distance sensor left front side"
+      translationStep 0.001
+      lookupTable [
+        0.15 4 0.003
+        5 0 0.003
+      ]
+      type "sonar"
+      numberOfRays 60
+      aperture 0.523599
+      redColorSensitivity 0
+    }
+  ]
+  sensorsSlotRear [
+    Camera {
+      translation -0.0608377 0 0.517649
+      rotation 0 1 0 0.550865
+      children [
+        Pose {
+        }
+      ]
+      name "camera_rear"
+      boundingObject Cylinder {
+        height 0.1
+        radius 0.05
+      }
+      rotationStep 0.0872665
+      fieldOfView 2.79253
+      width 1920
+      height 1080
+    }
+    DistanceSensor {
+      translation -0.0711568 -0.269022 -0.12
+      rotation 0 0 1 -0.174705
+      name "distance sensor lefter"
+      rotationStep 0.0872653
+      lookupTable [
+        0.15 4 0.003
+        5 0 0.003
+      ]
+      type "sonar"
+      numberOfRays 55
+      aperture 1.0472
+      redColorSensitivity 0
+    }
+    DistanceSensor {
+      translation -0.0711568 0.269022 -0.12
+      rotation 0 0 -1 -0.1747053071795861
+      name "distance sensor righter"
+      rotationStep 0.0872665
+      lookupTable [
+        0.15 4 0.003
+        5 0 0.003
+      ]
+      type "sonar"
+      numberOfRays 55
+      aperture 1.0472
+      redColorSensitivity 0
+    }
+    DistanceSensor {
+      translation -0.15902 0.789534 -0.12
+      rotation -3.18606e-08 1.39106e-09 -1 -0.6108553071795866
+      name "distance sensor right"
+      rotationStep 0.0872665
+      lookupTable [
+        0.15 4 0.003
+        5 0 0.003
+      ]
+      type "sonar"
+      numberOfRays 55
+      aperture 1.0472
+      redColorSensitivity 0
+    }
+    DistanceSensor {
+      translation -0.15402 -0.798194 -0.08
+      rotation -2.484499999999999e-08 3.270869999999999e-09 -0.9999999999999997 0.610855
+      name "distance sensor left"
+      translationStep 0.001
+      lookupTable [
+        0.15 4 0.003
+        5 0 0.003
+      ]
+      type "sonar"
+      numberOfRays 55
+      aperture 1.0472
+      redColorSensitivity 0
+    }
+    DistanceSensor {
+      translation -0.494127 -0.923199 -0.14
+      rotation -2.484499999999999e-08 3.270869999999999e-09 -0.9999999999999997 1.5707896938995747
+      name "distance sensor left side"
+      translationStep 0.001
+      lookupTable [
+        0.15 4 0.003
+        5 0 0.003
+      ]
+      type "sonar"
+      numberOfRays 60
+      aperture 0.523599
+      redColorSensitivity 0
+    }
+    DistanceSensor {
+      translation -0.494127 0.923199 -0.14
+      rotation -2.484499999999999e-08 3.270869999999999e-09 -0.9999999999999997 -1.57079
+      name "distance sensor right side"
+      translationStep 0.001
+      lookupTable [
+        0.15 4 0.003
+        5 0 0.003
+      ]
+      type "sonar"
+      numberOfRays 60
+      aperture 0.523599
+      redColorSensitivity 0
+    }
+  ]
+  sensorsSlotCenter [
+    Pose {
+      translation 7.6 0 -0.345
+      rotation 0.0036000084229357307 0.004099983332301328 0.9999851149272322 1.5707996938995747
+      children [
+        Floor {
+          translation 0 0 0.001
+          size 2 2
+          tileSize 2 2
+          appearance PBRAppearance {
+            baseColorMap ImageTexture {
+              url [
+                "../controllers/parking_parallel_new/checkerboards/apriltag2.png"
+              ]
+            }
+            transparency 1
+            roughness 1
+            metalness 0
+            IBLStrength 0
+          }
+        }
+        Floor {
+          name "background"
+          size 3 3
+          appearance PBRAppearance {
+            transparency 1
+            roughness 1
+            metalness 0
+            IBLStrength 0
+          }
+        }
+      ]
+      translationStep 0.001
+      rotationStep 0.01745
+    }
+    Pose {
+      translation -0.6 2.8 -0.307
+      children [
+        Floor {
+          translation 0 0 0.001
+          rotation 0 0 1 -1.5707996938995747
+          name "floor(1)"
+          size 1.5 1.5
+          tileSize 1.5 1.5
+          appearance PBRAppearance {
+            baseColorMap ImageTexture {
+              url [
+                "../controllers/parking_parallel_new/checkerboards/apriltag1.png"
+              ]
+            }
+            transparency 1
+            roughness 1
+            metalness 0
+            IBLStrength 0
+          }
+        }
+        Floor {
+          name "background(1)"
+          size 2.5 2.5
+          appearance PBRAppearance {
+            transparency 1
+            roughness 1
+            metalness 0
+            IBLStrength 0
+          }
+        }
+      ]
+      translationStep 0.001
+      rotationStep 0.01745
+    }
+    Pose {
+      translation -0.6 -2.8 -0.307
+      children [
+        Floor {
+          translation 0 0 0.001
+          rotation 0 0 1 -1.5707996938995747
+          name "floor(2)"
+          size 1.5 1.5
+          tileSize 1.5 1.5
+          appearance PBRAppearance {
+            baseColorMap ImageTexture {
+              url [
+                "../controllers/parking_parallel_new/checkerboards/apriltag1.png"
+              ]
+            }
+            transparency 1
+            roughness 1
+            metalness 0
+            IBLStrength 0
+          }
+        }
+        Floor {
+          name "background(2)"
+          size 2.5 2.5
+          appearance PBRAppearance {
+            transparency 1
+            roughness 1
+            metalness 0
+            IBLStrength 0
+          }
+        }
+      ]
+      translationStep 0.001
+      rotationStep 0.01745
+    }
+    Pose {
+      translation -2.299 -0.033 -0.297
+      children [
+        Floor {
+          translation 0 0 0.001
+          rotation 0 0 1 -1.5707996938995747
+          name "floor(3)"
+          size 1.5 1.5
+          tileSize 1.5 1.5
+          appearance PBRAppearance {
+            baseColorMap ImageTexture {
+              url [
+                "../controllers/parking_parallel_new/checkerboards/apriltag1.png"
+              ]
+            }
+            transparency 1
+            roughness 1
+            metalness 0
+            IBLStrength 0
+          }
+        }
+        Floor {
+          name "background(3)"
+          size 2.5 2.5
+          appearance PBRAppearance {
+            transparency 1
+            roughness 1
+            metalness 0
+            IBLStrength 0
+          }
+        }
+      ]
+      translationStep 0.001
+      rotationStep 0.01745
+    }
+    Accelerometer {
+      resolution 0.01
+    }
+    Gyro {
+      resolution 0.1
+    }
+    Floor {
+      translation 5 2.5 -0.3
+      rotation 0 0 1 -1.5707996938995747
+      name "front_left"
+      size 1.25 1
+      tileSize 1.25 1
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "D:\\User Files\\BACHELOR DIPLOMA\\Pliki symulacyjne\\controllers\\parking_parallel_new\\checkerboards\\calib_pnp.jpg"
+          ]
+          filtering 1
+        }
+        transparency 1
+        roughness 1
+        metalness 0
+        IBLStrength 0
+        emissiveIntensity 0
+      }
+    }
+    Floor {
+      translation 2.91 0 0.9
+      rotation 0 0 1 -1.5707996938995747
+      name "front1"
+      size 1.25 1
+      tileSize 1 1
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "D:\\User Files\\BACHELOR DIPLOMA\\Pliki symulacyjne\\controllers\\parking_parallel_new\\checkerboards\\check_base.png"
+          ]
+          filtering 1
+        }
+        transparency 1
+        roughness 1
+        metalness 0
+        IBLStrength 0
+        emissiveIntensity 0
+      }
+    }
+    Floor {
+      translation 5.25 0 -0.3
+      rotation 0 0 1 -1.5707996938995747
+      name "front2"
+      size 2 1.5
+      tileSize 1 1
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "D:\\User Files\\BACHELOR DIPLOMA\\Pliki symulacyjne\\controllers\\parking_parallel_new\\checkerboards\\check_base.png"
+          ]
+          filtering 1
+        }
+        transparency 1
+        roughness 1
+        metalness 0
+        IBLStrength 0
+        emissiveIntensity 0
+      }
+    }
+    Floor {
+      translation 2 2.9 -0.3
+      name "center1"
+      size 2 1.5
+      tileSize 1 1
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "D:\\User Files\\BACHELOR DIPLOMA\\Pliki symulacyjne\\controllers\\parking_parallel_new\\checkerboards\\check_base.png"
+          ]
+          filtering 1
+        }
+        transparency 1
+        roughness 1
+        metalness 0
+        IBLStrength 0
+        emissiveIntensity 0
+      }
+    }
+    Floor {
+      translation 2 -2.6 -0.3
+      name "center2"
+      size 2 1.5
+      tileSize 1 1
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "D:\\User Files\\BACHELOR DIPLOMA\\Pliki symulacyjne\\controllers\\parking_parallel_new\\checkerboards\\check_base.png"
+          ]
+          filtering 1
+        }
+        transparency 1
+        roughness 1
+        metalness 0
+        IBLStrength 0
+        emissiveIntensity 0
+      }
+    }
+    Floor {
+      translation -2.5 -2.5 -0.3
+      name "rear_right"
+      size 2.5 2
+      tileSize 2 2
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "D:\\User Files\\BACHELOR DIPLOMA\\Pliki symulacyjne\\controllers\\parking_parallel_new\\checkerboards\\check_base.png"
+          ]
+          filtering 1
+        }
+        transparency 1
+        roughness 1
+        metalness 0
+        IBLStrength 0
+        emissiveIntensity 0
+      }
+    }
+    Floor {
+      translation -2.5 2.5 -0.3
+      name "rear_left"
+      size 2.5 2
+      tileSize 2 2
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "D:\\User Files\\BACHELOR DIPLOMA\\Pliki symulacyjne\\controllers\\parking_parallel_new\\checkerboards\\check_base.png"
+          ]
+          filtering 1
+        }
+        transparency 1
+        roughness 1
+        metalness 0
+        IBLStrength 0
+        emissiveIntensity 0
+      }
+    }
+    Floor {
+      translation -3.1 0 -0.299
+      rotation 0.002999980500190123 0.001999987000126749 0.9999935000633743 1.5707996938995747
+      name "rear_center"
+      size 2 1.5
+      tileSize 1 1
+      appearance PBRAppearance {
+        baseColorMap ImageTexture {
+          url [
+            "D:\\User Files\\BACHELOR DIPLOMA\\Pliki symulacyjne\\controllers\\parking_parallel_new\\checkerboards\\check_base.png"
+          ]
+          filtering 1
+        }
+        transparency 1
+        roughness 1
+        metalness 0
+        IBLStrength 0
+        emissiveIntensity 0
+      }
+    }
+    Display {
+    }
+    Camera {
+      translation 2.05136 -1.09367 0.845003
+      rotation -0.15572897185519075 -4.231419235257988e-06 0.9877998214754953 -2.6146753071795863
+      name "camera_right_mirror"
+      boundingObject Cylinder {
+        height 0.1
+        radius 0.05
+      }
+      rotationStep 0.0872665
+      fieldOfView 1.57
+      width 1280
+      height 720
+    }
+    Camera {
+      translation 2.05136 1.09367 0.845003
+      rotation -0.15572897185519075 -4.231419235257988e-06 0.9877998214754953 2.61468
+      name "camera_left_mirror"
+      boundingObject Cylinder {
+        height 0.1
+        radius 0.05
+      }
+      rotationStep 0.0872665
+      fieldOfView 1.57
+      width 1280
+      height 720
+    }
+    InertialUnit {
+    }
+    GPS {
+      type "laser"
+      accuracy 1.25
+      noiseCorrelation 0.05
+      resolution 2.1
+      speedNoise 0.005
+      speedResolution 0.025
+    }
+  ]
+  shifter FALSE
+  outerWindowTransparency 0.1
+  innerWindowTransparency 0.4
+  innerWindowDust TRUE
+  window "automobile_window"
+}
