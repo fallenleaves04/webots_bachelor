@@ -15,6 +15,9 @@ from skimage.morphology import medial_axis
 from typing import List
 import traceback
 
+from scipy.signal import savgol_filter
+from scipy.interpolate import interp1d
+
 """
 Parametry samochodu
 """
@@ -54,22 +57,22 @@ class C:
     MAX_WHEEL_ANGLE = 0.5  # rad
     CAR_WIDTH = 1.95
     CAR_LENGTH = 4.85
-    MAX_SPEED = 2.0
+    MAX_SPEED = 4.0
     MAX_RADIUS = WHEELBASE/np.tan(MAX_WHEEL_ANGLE) # tg(delta) = L/R 
     MAX_CURVATURE = 1/MAX_RADIUS
     # parametry dla A*
     c_val = 1.5
     FORWARD_COST = c_val*1.2
     BACKWARD_COST = c_val*1.2
-    GEAR_CHANGE_COST = c_val*5.0
-    STEER_CHANGE_COST = c_val*1.5
-    STEER_ANGLE_COST = c_val*1.2
+    GEAR_CHANGE_COST = c_val*3.0
+    STEER_CHANGE_COST = c_val*2.5
+    STEER_ANGLE_COST = c_val*2.0
     OBS_COST = c_val*5.0
     H_COST = 1.0
     # parametry dla próbkowania
     XY_RESOLUTION = 0.1 # m
     YAW_RESOLUTION = np.deg2rad(5)
-
+    INTERP_STEP_SIZE = 0.005
     # parametry dla Stanley
     K_STANLEY = 0.5
 
@@ -100,8 +103,9 @@ class OccupancyGrid:
     """
     Siatka zajętości z KD-tree dla detekcji kolizji; aktualizowana z czujników ultradźwiękowych 
     """
-    def __init__(self):
+    def __init__(self,controller):
         
+        self.controller = controller
         self.car_width = C.CAR_WIDTH
         self.car_length = C.CAR_LENGTH
         self.wheel_base = C.WHEELBASE
@@ -140,7 +144,7 @@ class OccupancyGrid:
         # p(mi|z1:t; x1:t) = 1 − 1 / (1 + exp{l_t,i}) --- log odds
         self.l_0 = 0.0
         self.l_occ = 0.1 
-        self.l_free = -1.5
+        self.l_free = -0.8
         
         self.obstacles = []
         self.spots = []
@@ -199,6 +203,8 @@ class OccupancyGrid:
         for name in self.left_side_sensors:
             self.left_side_params[name] = {"min_range":max_min_dict[name][0],"max_range":max_min_dict[name][1],"aperture":self.left_side_apertures[name],"pose":self.sensor_poses[name]}
         self.params = {**self.front_params,**self.rear_params,**self.right_side_params,**self.left_side_params}
+        if not self.controller.sensors_set:
+            self.controller.sensorStats.emit(self.params,self.sensor_poses)
 
     # ta funkcja musi znaleźć indeks celi w układzie siatki, czyli tak na prawdę to ona 
     def make_cell(self,state) -> tuple:
@@ -407,10 +413,11 @@ class OccupancyGrid:
 
         self.grid[i_min:i_max+1, j_min:j_max+1] = grid_slice
 
+        #self.controller.sensorConeDraw.emit(sensor_name,sensor_global_x, sensor_global_y, sensor_global_theta, dist, beta)
+
     # jaka jest najlepsza reprezentacja tej siatki? aby samochód zaczynał po środku mapy, to trzeba uwzględnić ujemne indeksy
     # ale jak liczyć indeksy, jeżeli poza pojazdu jest ciągła? 
     def interpret_readings(self,names_dists:dict,car_pose:tuple):
-        
         name = "distance sensor left front side"
         dist = names_dists[name]
         self.update_grid(name,dist,car_pose)
@@ -482,8 +489,8 @@ class OccupancyGrid:
         car_x, car_y, car_yaw = car_pose
         
         if spot_type == 'parallel':
-            required_len = 6.0
-            min_spot_depth = 2.15
+            required_len = 5.8
+            min_spot_depth = 2.1
             orientation_offset = 0.0
         else: # perpendicular
             required_len = 2.7
@@ -681,6 +688,7 @@ class OccupancyGrid:
         sem_clustering = DBSCAN(eps=1.0, min_samples=3).fit(yolo_pts)
         sem_labels = sem_clustering.labels_
         yolo_clusters_rects = []
+        rects_to_send = []
         for label in set(sem_labels):
             if label == -1: continue
             pts = yolo_pts[sem_labels == label]
@@ -689,7 +697,9 @@ class OccupancyGrid:
             pts = pts.astype(np.float32)
             try:
                 rect = cv.minAreaRect(pts)
+                rect_info = [rect[0], rect[1][0], rect[1][1], np.radians(rect[2])]
                 corners = self.get_rect_corners(rect[0], rect[1][0], rect[1][1], np.radians(rect[2]))
+                rects_to_send.append(rect_info)
                 yolo_clusters_rects.append(corners)
             except cv.error as e:
                 continue
@@ -701,6 +711,7 @@ class OccupancyGrid:
                     obs['is_car'] = True
                     obs['type'] = 'car' 
                     break
+        #self.controller.yoloRects.emit(rects_to_send)
 
 class Path:
     """Reprezentuje ścieżkę (wynik planowania)"""
@@ -722,18 +733,19 @@ class Path:
         self.ind_old = 0
 
         self.int_v = 0.0
-        self.kp = 0.1
+        self.kp = 2.0
         self.ki = 5.0
         self.v_cmd_prev = 0.0
 
         self.s = self._build_len_s()
         self.last_ind = 0
 
-        self.K_theta = 1.0
-        self.K_e = 1.0
+        self.K_theta = 1.5
+        self.K_e = 0.7
         self.segments = []
         
-        
+        self.v_prev = 0.0
+        self.pid_switch = False
 
         self.active_segment = 0
         self.segment_hold = True
@@ -771,29 +783,13 @@ class Path:
         return s
     
     def calc_theta_e_and_er(self, x,y,yaw):
-        """
-        calc theta_e and er.
-        theta_e = theta_car - theta_path
-        er = lateral distance in frenet frame
 
-        :param node: current information of vehicle
-        :return: theta_e and er
-        """
-
-        #ind = self.nearest_index(x,y)
         ind = self.nearest_index(x, y)
-        #ind += 5
         k = self.curvs[ind]
         path_yaw = self.yaws[ind]
-        # if self.directions[ind] < 0:
-        #     path_yaw = mod2pi(path_yaw + np.pi)
-        rear_axle_vec_rot_90 = np.array([[math.cos(path_yaw + math.pi / 2.0)],
-                                         [math.sin(path_yaw + math.pi / 2.0)]])
-
-        vec_target_2_rear = np.array([[x - self.xs[ind]],
-                                      [y - self.ys[ind]]])
-
-        er = float(np.dot(vec_target_2_rear.T, rear_axle_vec_rot_90))
+        n = np.array([math.sin(path_yaw), -math.cos(path_yaw)])
+        d = np.array([x - self.xs[ind], y - self.ys[ind]])
+        er = float(np.dot(d, n))    
         theta_e = mod2pi(yaw-path_yaw)
 
         return theta_e, er, k, yaw, ind
@@ -808,54 +804,71 @@ class Path:
 
         return ind
 
-       
-    def speed_control(self,target_v,v_meas,dist_to_end,dt,dist_stop = 0.5,a_max = 1.0):
-        if dist_to_end < dist_stop:
-            target_v = target_v * (dist_to_end / dist_stop)
-        else:
-            target_v = target_v
-        err = target_v - v_meas
-        self.int_v += err * dt
-        self.int_v = np.clip(self.int_v, -a_max/self.ki, a_max/self.ki)
-        v_reg = self.kp * err + self.ki * self.int_v
-        v_reg_sat = np.clip(v_reg, -C.MAX_SPEED, C.MAX_SPEED)
-        if v_reg != v_reg_sat:
-            self.int_v -= err * dt
-        #dv_max = a_max * dt
-        # v_cmd = np.clip(
-        #     v_reg,
-        #     self.v_cmd_prev - dv_max,
-        #     self.v_cmd_prev + dv_max
-        # )
-        self.v_cmd_prev = v_reg
-        return v_reg
-    def rear_wheel_feedback_control(self,x,y,v,yaw): 
-        """
-        rear wheel feedback controller
-        :param node: current information
-        :param ref_path: reference path: x, y, yaw, curvature
-        :return: optimal steering angle
-        """
+    def get_longitudinal_error(self, x, y, seg_end_idx):
+        dx = self.xs[seg_end_idx] - x
+        dy = self.ys[seg_end_idx] - y
 
+        yaw_end = self.yaws[seg_end_idx]
+        e_long = dx * np.cos(yaw_end) + dy * np.sin(yaw_end)
+        
+        return e_long
+
+    def speed_control(self,target_v,v_meas,dist_to_end,e_long,delta,dt,a_max = 4.0,a_dec = 4.0,a_lat_max = 1.7,kp_long = 10.0, e_long_thresh = 0.2):
+        
+        v_stop = np.sqrt(2 * a_dec * max(dist_to_end,0.0))
+        v_ref = min(abs(target_v), v_stop)
+        v_ref *= np.sign(target_v)
+        kappa = np.tan(delta)/C.WHEELBASE
+        if dist_to_end <= e_long_thresh and e_long < 0:
+            # e_long < 0 znaczy, że przejechał za daleko
+            # Chcemy dodać ujemną składową do prędkości do przodu (lub dodatnią do tyłu)
+            correction = kp_long * e_long  # to będzie ujemne
+            v_ref += correction
+            
+        
+        v_ref = np.clip(v_ref, -C.MAX_SPEED, C.MAX_SPEED)
+        kappa = np.tan(delta) / C.WHEELBASE
+        v_curve = np.sqrt(a_lat_max / max(abs(kappa), 1e-3))
+        v_ref = min(abs(v_ref), v_curve) * np.sign(v_ref)
+        v_cmd = np.clip(
+            v_ref,
+            self.v_cmd_prev - a_dec * dt,
+            self.v_cmd_prev + a_max * dt
+        )
+
+        self.v_cmd_prev = v_cmd
+        self.v_prev = v_meas
+        return v_cmd
+    
+    def rear_wheel_feedback_control(self,x,y,v,yaw): 
+        self.changed = False
         theta_e, er, k, yaw, ind = self.calc_theta_e_and_er(x,y,yaw)
         
-        # if abs(theta_e) < 1e-3:
-        #     term_e = self.K_e * v * er
-        # else:
-        term_e = self.K_e * v * math.sin(theta_e) * er / theta_e
-        omega = v * k * math.cos(theta_e) / (1.0 - k * er) - \
-            self.K_theta * abs(v) * theta_e - term_e
+        seg_start, seg_end = self.get_segment_bounds()
+        ind_nearest = np.clip(ind, seg_start, seg_end)
 
-        delta = math.atan2(C.WHEELBASE * omega, abs(v) + 1e-6)
-        # if abs(v) < 1e-4:
-        #     delta = -delta
-        #print(f"theta_e: {theta_e}, er: {er}, k: {k}, yaw: {yaw}, delta: {delta}, ind: {ind}")
-        print(f"delta: {delta}, ind: {ind}, dir: {self.directions[ind]}")
-        return delta, ind
+        if abs(theta_e) < 1e-3:
+            sinc = 1.0
+        else:
+            sinc = math.sin(theta_e) / theta_e
+
+        term_e = self.K_e * v * sinc * er
+        omega = (
+            v * k * math.cos(theta_e) / (1.0 - k * er)
+            - self.K_theta * abs(v) * theta_e
+            - term_e
+        )
+
+        if abs(v) < 1e-4:
+            delta = 0.0
+        else:
+            delta = math.atan(C.WHEELBASE * omega / v)
+            if v < 0:
+                delta = -delta
+        return delta, ind,self.changed
 
     def get_segment_bounds(self):
         return self.segments[self.active_segment]
-    
     
     def advance_segment(self):
         if self.active_segment < len(self.segments) - 1:
@@ -863,20 +876,10 @@ class Path:
             self.segment_hold = True
             return True
         return False
-    def find_lookahead_index(self, ind_nearest, Ld):
-        """
-        Szuka indeksu punktu oddalonego o Ld wzdłuż ścieżki (po s)
-        """
-        s0 = self.s[ind_nearest]
-        s_target = s0 + Ld
-
-        for i in range(ind_nearest, len(self.s)):
-            if self.s[i] >= s_target:
-                return i
-
-        return len(self.s) - 1
+    
 
     def pure_pursuit(self, x, y, yaw, v, ld=0.5):
+        self.changed = False
         ind_nearest = self.nearest_index(x, y)
         seg_start, seg_end = self.get_segment_bounds()
         ind_nearest = np.clip(ind_nearest, seg_start, seg_end)
@@ -892,11 +895,11 @@ class Path:
                 self.ind_la = i
                 break
         
-        if (seg_end - ind_nearest) <= 2:
-            self.ind_la = seg_end
-            if self.segment_hold:
-                self.segment_hold = False
-                self.changed = self.advance_segment()
+        # if (seg_end - ind_nearest) <= 2:
+        #     self.ind_la = seg_end
+        #     if self.segment_hold:
+        #         self.segment_hold = False
+        #         self.changed = self.advance_segment()
 
         
         tx = self.xs[self.ind_la]
@@ -919,7 +922,7 @@ class Path:
 
 def savitzky_golay_filt(x, window=11, poly=3):
     try:
-        from scipy.signal import savgol_filter
+
         # window musi być nieparzyste i <= len(x)
         window = min(window, len(x) if len(x)%2==1 else len(x)-1)
         window = max(window, poly+2 if (poly+2)%2==1 else poly+3)
@@ -928,8 +931,8 @@ def savitzky_golay_filt(x, window=11, poly=3):
         return savgol_filter(x, window_length=window, polyorder=poly, mode='interp')
     except Exception:
         return x
-    
-def resample_and_smooth_path(path:Path, ds=0.01):
+
+def resample_and_smooth_path(path:Path, ds=C.INTERP_STEP_SIZE):
     
     xs = np.asarray(path.xs, dtype=float)
     ys = np.asarray(path.ys, dtype=float)
@@ -959,12 +962,10 @@ def resample_and_smooth_path(path:Path, ds=0.01):
 
         s_dense = np.arange(0.0, s_end + 1e-9, ds)
 
-        # interpolacja liniowa x(s), y(s) — wystarczy na demo i jest stabilna
+        # interpolacja liniowa x(s), y(s) 
         x_dense = np.interp(s_dense, s_local, x_seg)
         y_dense = np.interp(s_dense, s_local, y_seg)
 
-        # wygładzanie geometrii (x,y), a nie yaw
-        
         x_dense = savitzky_golay_filt(x_dense, window=11, poly=3)
         y_dense = savitzky_golay_filt(y_dense, window=11, poly=3)
         
@@ -972,7 +973,6 @@ def resample_and_smooth_path(path:Path, ds=0.01):
         dir_val = int(np.sign(d_seg[0])) if np.sign(d_seg[0]) != 0 else 1
         dir_dense = np.full_like(x_dense, dir_val, dtype=int)
 
-        # "segment_length" jak w reeds-shepp: tu po prostu długość segmentu (z znakiem kierunku)
         seglen_dense = np.full_like(x_dense, dir_val * s_end, dtype=float)
 
         kappa_dense = np.interp(s_dense, s_local, path.curvs[i0:i1+1])
@@ -995,20 +995,11 @@ def resample_and_smooth_path(path:Path, ds=0.01):
     x_all = np.concatenate(out_x)
     y_all = np.concatenate(out_y)
     dir_all = np.concatenate(out_dir)
-    kappa_all = np.concatenate(out_kappa)
+    kappa = np.concatenate(out_kappa)
     seglen_all = np.concatenate(out_seglen)
-
     dx = np.gradient(x_all, ds)
     dy = np.gradient(y_all, ds)
-    yaw = np.arctan2(dy, dx)
-    yaw = np.unwrap(yaw)
-    # yaw_corrected = yaw.copy()
-    # for i in range(len(yaw_corrected)):
-    #     if dir_all[i] < 0:
-    #         yaw_corrected[i] = yaw_corrected[i] + np.pi
-    # yaw = yaw_corrected
-    
-    kappa = kappa_all
+    yaw = np.unwrap(np.arctan2(dy, dx))
     
     new_path = Path(
         xs=list(x_all),
@@ -1261,7 +1252,7 @@ class NewPlanner(QtCore.QObject):
         if not rs_path:
             return None,None
         for i in range(0,len(rs_path),1): 
-            (rs_xs,rs_ys,rs_yaws,rs_deltas,rs_segment_lengths) = rs_path[i]
+            (rs_xs,rs_ys,rs_yaws,rs_curvs,rs_segment_lengths) = rs_path[i]
             if grid.is_collision(rs_xs,rs_ys,rs_yaws):
                 return None,None
         

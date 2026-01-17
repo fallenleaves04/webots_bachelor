@@ -32,7 +32,8 @@ class SpeedView(pg.GraphicsLayoutWidget):
         self.view_speed.setMouseEnabled(x=True, y=True)
         self.view_speed.showGrid(x=True, y=True, alpha=0.3)
         self.view_speed.addLegend()
-
+        self.view_speed.setLabel('left','Prędkość [km/h]')
+        self.view_speed.setLabel('bottom','Czas [s]')   
         # Bufory
         self.t1t, self.t1v1 = [], []
         self.t2v2 = []
@@ -92,7 +93,8 @@ class AngleView(pg.GraphicsLayoutWidget):
         self.view_angle.setMouseEnabled(x=True, y=True)
         self.view_angle.showGrid(x=True, y=True, alpha=0.3)
         self.view_angle.addLegend()
-
+        self.view_angle.setLabel('left','Kąt [rad]')
+        self.view_angle.setLabel('bottom','Czas [s]')   
         # Bufory
         self.t1t, self.t1a = [], []
         self.t2y, self.t3y = [],[]
@@ -272,7 +274,9 @@ class TrajView(pg.GraphicsLayoutWidget):
         self.view_trajectory.setMouseEnabled(x=True, y=True)
         self.view_trajectory.showGrid(x=True, y=True, alpha=0.3)
         self.view_trajectory.addLegend()
-        
+        self.view_trajectory.setLabel('bottom','X [m]')
+        self.view_trajectory.setLabel('left','Y [m]')
+        self.view_trajectory.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
         # Bufory
         self.t1x, self.t1y = [], []
         self.t2x, self.t2y = [], []
@@ -285,7 +289,7 @@ class TrajView(pg.GraphicsLayoutWidget):
         self.traj_curve1 = self.view_trajectory.plot([], [], pen='r', name="Odometria")
         self.traj_curve2 = self.view_trajectory.plot([], [], pen='b', name="Webots")
         self.traj_curve3 = self.view_trajectory.plot([], [], pen=None, symbol='s',symbolSize=4,symbolBrush='k',symbolPen=None, name="Przeszkody")
-        #self.traj_curve_yolo = self.view_trajectory.plot([], [], pen=None, symbol='t',symbolSize=2,symbolBrush='k',symbolPen=None, name="YOLO")
+        self.traj_curve_yolo = self.view_trajectory.plot([], [], pen=None, symbol='t',symbolSize=2,symbolBrush='k',symbolPen=None, name="YOLO")
         self.traj_curve4 = self.view_trajectory.plot([], [], pen=None, symbol='o',symbolSize=5,symbolBrush='k',symbolPen=None, name="Miejsca pojazdu")
         #self.traj_curve5 = self.view_trajectory.plot([], [], pen='g', name="Przykładowa ścieżka")
         self.traj_curve6 = self.view_trajectory.plot([], [], pen=pg.mkPen(color=(0, 100, 100), width=1.5), name="Ścieżka Hybrid-A*")
@@ -299,11 +303,17 @@ class TrajView(pg.GraphicsLayoutWidget):
         self.car_rect.setPen(pen)
         self.car_rect.setBrush(QtGui.QBrush(QtGui.QColor(60, 10, 60, 150)))
         self.view_trajectory.addItem(self.car_rect)
-        #
+        # rysowanie miejsc, przeszkód, tekst dla typu miejsca (już nieużyte), 
         self.obstacle_items = []
         self.spots_items = []
         self.text_items = []
-        
+        self.yolo_rect_items = []
+        # dla rysowania stożków
+        self.sensor_cones = {}  
+        self.cone_pen = pg.mkPen(
+            color=QtGui.QColor(200, 0, 0, 80),
+            width=3
+        )
         self.view_trajectory.scene().sigMouseClicked.connect(self.on_mouse_click)
 
         cont.parkingToggled.connect(self.on_parking_change)
@@ -312,7 +322,29 @@ class TrajView(pg.GraphicsLayoutWidget):
         cont.expansionUpdated.connect(self.draw_expansion_cars)
         cont.hmapUpdated.connect(self.draw_hmap)
         cont.pathCarUpdated.connect(self.draw_path_car)
-        
+        cont.sensorConeDraw.connect(self.draw_sensor_cone)
+        cont.yoloRects.connect(self.draw_yolo_rects)
+
+    def draw_yolo_rects(self, rects):
+        for item in self.yolo_rect_items:
+            self.view_trajectory.removeItem(item)
+        self.yolo_rect_items.clear()
+
+        for rect in rects:
+            center = rect[0]
+            leng = rect[1]
+            wid  = rect[2]
+            ang  = rect[3]
+
+            rrect = self.make_rect(center[0], center[1], leng, wid, ang)
+
+            rrect.setBrush(QtGui.QBrush(QtGui.QColor(119, 181, 156, 120)))
+            rrect.setPen(pg.mkPen(color=(20, 120, 80), width=2))
+            rrect.setZValue(-5)  # NAD siatką, POD samochodem
+
+            self.view_trajectory.addItem(rrect)
+            self.yolo_rect_items.append(rrect)
+
     def make_car(self,l_c=C.CAR_LENGTH,w_c=C.CAR_WIDTH):
         pts = [
             QtCore.QPointF(-1, -w_c/2),
@@ -365,10 +397,50 @@ class TrajView(pg.GraphicsLayoutWidget):
                     item.setBrush(QtGui.QBrush(QtGui.QColor(0, 200, 0, 100)))
                     break # Znaleziono, przerywamy pętlę
         
-                    
+    @QtCore.pyqtSlot(str,float,float,float,float,float)
+    def draw_sensor_cone(self, sensor_name,sensor_global_x, sensor_global_y, sensor_global_theta, dist, aperture):
+        """
+        Rysuje stożek czujnika na wykresie (granice detekcji).
+        """
+        if self.controller.sensors_set:
+
+            if sensor_name not in self.sensor_cones:
+                # utwórz linie tylko raz
+                left_line = self.view_trajectory.plot([], [], pen=self.cone_pen)
+                right_line = self.view_trajectory.plot([], [], pen=self.cone_pen)
+                self.sensor_cones[sensor_name] = (left_line, right_line)
+
+            left_line, right_line = self.sensor_cones[sensor_name]
+
+            # Oblicz krawędzie stożka
+            # Obliczamy dwa skrajne kąty na podstawie kąta rozwarcia
+            left_angle = sensor_global_theta - aperture / 2.0
+            right_angle = sensor_global_theta + aperture / 2.0
+
+            # Zasięg czujnika w kierunkach lewym i prawym
+            x_left = sensor_global_x + dist * np.cos(left_angle)
+            y_left = sensor_global_y + dist * np.sin(left_angle)
+            x_right = sensor_global_x + dist * np.cos(right_angle)
+            y_right = sensor_global_y + dist * np.sin(right_angle)
+
+            # Rysowanie stożka (trójkąt lub linie) - połączenie punktów
+            self.view_trajectory.plot([sensor_global_x, x_left], [sensor_global_y, y_left], pen=pg.mkPen(color=QtGui.QColor(50, 50, 50, 80), width=1))
+            self.view_trajectory.plot([sensor_global_x, x_right], [sensor_global_y, y_right], pen=pg.mkPen(color=QtGui.QColor(50, 50, 50, 80), width=1))
+            left_line.setData(
+                [sensor_global_x, x_left],
+                [sensor_global_y, y_left]
+            )
+
+            right_line.setData(
+                [sensor_global_x, x_right],
+                [sensor_global_y, y_right]
+            )
 
     @QtCore.pyqtSlot(object)
     def update_trajectory(self, data):
+        """
+        Rysuje wszystkie trajektorie, punkty przeszkód, YOLO itd.
+        """
         x1, y1 = data[0][0], data[0][1]
         x2, y2 = data[1][0], data[1][1]
         # dopisz douforów
@@ -377,13 +449,13 @@ class TrajView(pg.GraphicsLayoutWidget):
         if not all(v is None for v in data[2]):
             self.t3x = data[2][0]; self.t3y = data[2][1]
             self.traj_curve3.setData(self.t3x, self.t3y)
-        # if not all(v is None for v in data[5]):
-        #     self.tx_yolo = data[5][0]; self.ty_yolo = data[5][1]
-        #     self.traj_curve_yolo.setData(self.tx_yolo, self.ty_yolo)
+    
+        if not all(v is None for v in data[5]):
+            self.tx_yolo = data[5][0]; self.ty_yolo = data[5][1]
+            self.traj_curve_yolo.setData(self.tx_yolo, self.ty_yolo)
         # zaktualizuj krzywe
         self.traj_curve1.setData(self.t1x, self.t1y)
         self.traj_curve2.setData(self.t2x, self.t2y)
-        
         
         
         for item in self.obstacle_items:
@@ -399,8 +471,13 @@ class TrajView(pg.GraphicsLayoutWidget):
             center_x,center_y = obstacle['center'][0],obstacle['center'][1]
             leng,wid,ang = obstacle['length'],obstacle['width'],obstacle['angle']
             obs = self.make_rect(center_x,center_y,leng,wid,ang)
+            if obstacle['is_car']:
+                color = QtGui.QColor(119,181,156,160)  # zielony
+            else:
+                color = QtGui.QColor(180,180,180,80)
+            obs.setBrush(QtGui.QBrush(color))
             self.obstacle_items.append(obs)
-
+            
             #text = pg.TextItem(f"{obstacle['type']}", color='r', anchor=(0.5, 0.5))
             #text.setPos(center_x, center_y)  # Ustaw pozycję w układzie współrzędnych wykresu
             #self.text_items.append(text)
@@ -419,6 +496,7 @@ class TrajView(pg.GraphicsLayoutWidget):
             spot.spot_data = spotss
             self.spots_items.append(spot)
             self.traj_curve4.setData(self.t4x,self.t4y)
+
         for spot in self.spots_items:
             self.view_trajectory.addItem(spot)
         
@@ -439,6 +517,9 @@ class TrajView(pg.GraphicsLayoutWidget):
 
     @QtCore.pyqtSlot(object)
     def draw_path_car(self,pose):
+        """
+        Rysuje samochód śledzony dla Pure Pursuit
+        """
         if not self.path_car_inserted:
             self.path_car_item = self.make_car()
             pen = pg.mkPen(None)
@@ -450,6 +531,9 @@ class TrajView(pg.GraphicsLayoutWidget):
         self.transform_car_item(self.path_car_item,pose)
     @QtCore.pyqtSlot(object)
     def draw_path(self, path):
+        """
+        Rysuje ścieżkę docelową
+        """
         if not self.controller.parking or self.controller.state == "inactive":
             return
         self.t6x = path.xs[:] 
@@ -459,6 +543,9 @@ class TrajView(pg.GraphicsLayoutWidget):
         print(f"[TrajView] Ścieżka narysowana: {len(self.t6x)} punktów")
 
     def transform_car_item(self,item,pose):
+        """
+        Transformacja samochodu jako prostokąta na wykresie
+        """
         x,y,yaw = pose
         t = QtGui.QTransform()
         t.translate(x, y)
@@ -467,6 +554,9 @@ class TrajView(pg.GraphicsLayoutWidget):
 
     @QtCore.pyqtSlot(object)
     def draw_expansion_cars(self,car_pos):
+        """
+        Dla wizualizacji ekspansji węzłów w Hybrid-A*
+        """
         car_item = self.make_car()
         pen = pg.mkPen(None)
         car_item.setPen(pen)
@@ -529,7 +619,12 @@ class TrajView(pg.GraphicsLayoutWidget):
             self.traj_curve6.setData([], [])   
             self.traj_curve3.setData([], [])
             self.traj_curve4.setData([], [])
-            #self.traj_curve_yolo.setData([], [])
+            self.traj_curve_yolo.setData([], [])
+            for left, right in self.sensor_cones.values():
+                self.view_trajectory.removeItem(left)
+                self.view_trajectory.removeItem(right)
+            self.sensor_cones.clear()
+
             self.hide()
 
 class SensorView(pg.GraphicsLayoutWidget):
@@ -1373,6 +1468,7 @@ class MainWindow(QtWidgets.QWidget):
             "executing": "Ścieżka znaleziona! Proszę się poruszać zgodnie z sygnałami...",
             "drive_forward": "Jedź do przodu.",
             "drive_backward": "Jedź do tyłu.",
+            "stop_for_change": "Zatrzymaj się.",
             "parking_finished": "Parkowanie ukończone. Proszę wyłączyć asystent parkowania."
         }
         

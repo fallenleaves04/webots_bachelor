@@ -1,0 +1,51 @@
+PERPENDICULAR 1_1
+
+Logi po ukończeniu parkowania: {'path_length': 12.68951209781929, 'segments': 2, 'mean_er': 0.005720908762590544, 'x_err': -0.0001669002869402192, 'y_err': -0.029980664573360016, 'yaw_err': -3.193784861205689, 'time': 37.05600000000001, 'mean_speed': 0.34185112887495905}
+
+PERPENDICULAR 1_2
+
+Logi po ukończeniu parkowania: {'path_length': 12.110648820764439, 'segments': 2, 'mean_er': 0.010826456737831202, 'x_err': 0.003166738220311771, 'y_err': 0.029809082672636045, 'yaw_err': -3.2254033250052503, 'time': 35.456, 'mean_speed': 0.34095300595338657}
+
+PERPENDICULAR 1_3 
+
+Logi po ukończeniu parkowania: {'path_length': 12.344727656540966, 'segments': 2, 'mean_er': 0.021921299173259516, 'x_err': 0.029246165083741005, 'y_err': 0.2414074523305363, 'yaw_err': -3.234053403897682, 'time': 17.344, 'mean_speed': 0.7091411471239314}
+
+PERPENDICULAR 2_1
+
+Logi po ukończeniu parkowania: {'path_length': 13.096446003136787, 'segments': 2, 'mean_er': 0.013940877285204812, 'x_err': 0.0016456810246578968, 'y_err': 0.00383126110348897, 'yaw_err': -3.1320052923763226, 'time': 31.36, 'mean_speed': 0.4167657756549456}
+
+PERPENDICULAR 2_2
+
+Logi po ukończeniu parkowania: {'path_length': 12.260711368080168, 'segments': 2, 'mean_er': 0.012168070292292932, 'x_err': 0.020625877662835634, 'y_err': 0.2136738047621538, 'yaw_err': -3.187670687922397, 'time': 40.896, 'mean_speed': 0.2993338023889024}
+
+PERPENDICULAR 2_3
+
+Logi po ukończeniu parkowania: {'path_length': 12.037127011831927, 'segments': 2, 'mean_er': 0.011998594286660596, 'x_err': 0.03502197922995354, 'y_err': 0.36628029048532706, 'yaw_err': -3.203778599008814, 'time': 15.616, 'mean_speed': 0.7676740000873774}
+
+PARALLEL 1_1
+
+Logi po ukończeniu parkowania: {'path_length': 10.927789225735014, 'segments': 4, 'mean_er': 0.0071680284107056985, 'x_err': 0.5447622604313436, 'y_err': 0.023860836704491017, 'yaw_err': -3.19183257289358, 'time': 41.216, 'mean_speed': 0.264723621570053}
+
+PARALLEL 1_2
+
+Logi po ukończeniu parkowania: {'path_length': 12.966052404820845, 'segments': 3, 'mean_er': 0.017369345104157077, 'x_err': 0.3830364741256167, 'y_err': 0.026728732955129786, 'yaw_err': -0.03131559868770352, 'time': 46.976, 'mean_speed': 0.2756388832876292}
+
+PARALLEL 1_3
+
+Logi po ukończeniu parkowania: {'path_length': 11.231436028311045, 'segments': 3, 'mean_er': 0.006420637425539831, 'x_err': 0.3845314157197599, 'y_err': 0.014897165817577385, 'yaw_err': -0.008239569641298662, 'time': 17.28, 'mean_speed': 0.647569075000213}
+
+PARALLEL STREET_1
+
+Logi po ukończeniu parkowania: {'path_length': 10.363406520357428, 'segments': 3, 'mean_er': 0.006975485939111687, 'x_err': 0.20856434157333048, 'y_err': 0.006798477827895333, 'yaw_err': 0.00744344538359094, 'time': 26.752000000000002, 'mean_speed': 0.38646359844577444}
+
+PARALLEL 2_1
+
+Logi po ukończeniu parkowania: {'path_length': 11.203499000976512, 'segments': 4, 'mean_er': 0.0087225126005172, 'x_err': -0.11604748350799632, 'y_err': -0.019471736878981627, 'yaw_err': -3.0980182905208173, 'time': 43.072, 'mean_speed': 0.25972505751629166}
+
+PARALLEL 2_2
+
+Logi po ukończeniu parkowania: {'path_length': 16.046684992661056, 'segments': 4, 'mean_er': 0.010922893998241291, 'x_err': 0.38793878844559515, 'y_err': 0.0637031197534581, 'yaw_err': -3.0480551959180016, 'time': 52.288, 'mean_speed': 0.30651523744113085}
+
+PARALLEL 2_3
+
+Logi po ukończeniu parkowania: {'path_length': 11.02334680993237, 'segments': 4, 'mean_er': 0.006936525024522173, 'x_err': -0.13062643021974019, 'y_err': -0.011892813196255236, 'yaw_err': -3.1212976901034137, 'time': 19.712, 'mean_speed': 0.5574104614973926}
