@@ -8,7 +8,10 @@ import cv2 as cv
 import camera_calibration as cc
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui, QtWidgets
+from pyqtgraph.exporters import ImageExporter
 from park_algo import C
+from PyQt5 import Qt as qt5
+import os
 # Vehicle parameters
 TRACK_FRONT = 1.628
 TRACK_REAR = 1.628
@@ -19,6 +22,8 @@ CAR_LENGTH = 4.85
 s=1
 car = cv.imread("pngegg.png")
 car = cv.cvtColor(car,cv.COLOR_BGR2RGB)
+
+
 
 class SpeedView(pg.GraphicsLayoutWidget):   
     def __init__(self,cont):
@@ -36,10 +41,11 @@ class SpeedView(pg.GraphicsLayoutWidget):
         self.view_speed.setLabel('bottom','Czas [s]')   
         # Bufory
         self.t1t, self.t1v1 = [], []
-        self.t2v2 = []
+        self.t2v2, self.t3v3 = [], []
         # Krzywe
         self.pl1 = self.view_speed.plot([], [], pen='r', name="Prędkość odometria [km/h]")
         self.pl2 = self.view_speed.plot([], [], pen='b', name="Prędkość supervisor [km/h]")
+        #self.pl3 = self.view_speed.plot([], [], pen = pg.mkPen("#249200", width=2), name="Prędkość zadana [km/h]")
         #
         self.view_speed.setClipToView(True)
         self.view_speed.setDownsampling(mode='peak')
@@ -53,35 +59,99 @@ class SpeedView(pg.GraphicsLayoutWidget):
         self.t1t = []
         self.t1v1 = []
         self.t2v2 = []
-
+        self.t3v3 = []
         self.pl1.setData([], [])
         self.pl2.setData([], [])
+        #self.pl3.setData([], [])
     @QtCore.pyqtSlot(object)
     def update_speed(self, speed_data):
         t = speed_data[0]
         v1 = speed_data[1] * 3.6  
         v2 = speed_data[2] * 3.6  
+        v3 = speed_data[3] 
         # dopisz do buforów
-        self.t1t.append(t); self.t1v1.append(v1); self.t2v2.append(v2)
+        self.t1t.append(t); self.t1v1.append(v1); self.t2v2.append(v2); #self.t3v3.append(v3)
 
         # zaktualizuj krzywe
         self.pl1.setData(self.t1t, self.t1v1)
         self.pl2.setData(self.t1t, self.t2v2)
+        #self.pl3.setData(self.t1t, self.t3v3)
+    @QtCore.pyqtSlot(bool)
+    def on_parking_change(self, is_parking):
+        self.running = is_parking
+        if is_parking:
+            #self.show()
+            self.showMaximized()
+        else:
+            del self.t1t[:]
+            del self.t1v1[:]
+            del self.t2v2[:]
+            del self.t3v3[:]
+            self.hide()
+
+
+       
+class AngleView1(pg.GraphicsLayoutWidget):   
+    def __init__(self,cont):
+        super().__init__(title="Wykres kąta skrętu i odchylenia")
+        self.setBackground((235,235,250))
+
+        
+        self.running = True
+        self.view_angle = self.addPlot(lockAspect=True)
+        self.view_angle.setRange(xRange=[-30, 30], yRange=[-30, 30])
+        self.view_angle.setMouseEnabled(x=True, y=True)
+        self.view_angle.showGrid(x=True, y=True, alpha=0.3)
+        self.view_angle.addLegend()
+        self.view_angle.setLabel('left','Kąt [rad]')
+        self.view_angle.setLabel('bottom','Czas [s]')   
+        # Bufory
+        self.t1t= []
+        self.t2y, self.t3y = [],[]
+        # Krzywe
+        self.pl2 = self.view_angle.plot([], [], pen='r', name="Kąt odchylenia odometria [rad]")
+        self.pl3 = self.view_angle.plot([], [], pen='b', name="Kąt odchylenia z Webots [rad]")
+        #
+        self.view_angle.setClipToView(True)
+        self.view_angle.setDownsampling(mode='peak')
+
+        cont.angleUpdated.connect(self.update_angle)
+        cont.parkingToggled.connect(self.on_parking_change)
+        cont.clearDataPlots.connect(self.clear_plots)
+
+    @QtCore.pyqtSlot()
+    def clear_plots(self):
+        self.t1t = []
+        self.t2y = []
+        self.t3y = []
+        self.pl2.setData([], [])
+        self.pl3.setData([], [])
+        
+    @QtCore.pyqtSlot(object)
+    def update_angle(self, angle_data):
+        t = angle_data[0]
+        y = angle_data[2]
+        y1 = angle_data[3]
+        # dopisz do buforów
+        self.t1t.append(t); self.t2y.append(y); self.t3y.append(y1)
+        
+        # zaktualizuj krzywe
+        self.pl2.setData(self.t1t, self.t2y)
+        self.pl3.setData(self.t1t, self.t3y)
 
     @QtCore.pyqtSlot(bool)
     def on_parking_change(self, is_parking):
         self.running = is_parking
         if is_parking:
-            self.show()
+            #self.show()
+            self.showMaximized()
         else:
             del self.t1t[:]
-            del self.t1v1[:]
-            del self.t2v2[:]
+            del self.t2y[:]
+            del self.t3y[:]
             self.hide()
 
-
-       
-class AngleView(pg.GraphicsLayoutWidget):   
+class AngleView2(pg.GraphicsLayoutWidget):   
     def __init__(self,cont):
         super().__init__(title="Wykres kąta skrętu i odchylenia")
         self.setBackground((235,235,250))
@@ -99,9 +169,8 @@ class AngleView(pg.GraphicsLayoutWidget):
         self.t1t, self.t1a = [], []
         self.t2y, self.t3y = [],[]
         # Krzywe
-        self.pl1 = self.view_angle.plot([], [], pen='r', name="Kąt skrętu [rad]")
-        self.pl2 = self.view_angle.plot([], [], pen='b', name="Kąt odchylenia odometria [rad]")
-        self.pl3 = self.view_angle.plot([], [], pen='g', name="Kąt odchylenia z Webots [rad]")
+        pen = pg.mkPen("#7D0000", width=2)
+        self.pl1 = self.view_angle.plot([], [], pen=pen, name="Kąt skrętu [rad]")
         #
         self.view_angle.setClipToView(True)
         self.view_angle.setDownsampling(mode='peak')
@@ -114,37 +183,28 @@ class AngleView(pg.GraphicsLayoutWidget):
     def clear_plots(self):
         self.t1t = []
         self.t1a = []
-        self.t2y = []
-        self.t3y = []
 
         self.pl1.setData([], [])
-        self.pl2.setData([], [])
-        self.pl3.setData([], [])
         
     @QtCore.pyqtSlot(object)
     def update_angle(self, angle_data):
         t = angle_data[0]
         a = angle_data[1]  
-        y = angle_data[2]
-        y1 = angle_data[3]
         # dopisz do buforów
-        self.t1t.append(t); self.t1a.append(a); self.t2y.append(y); self.t3y.append(y1)
+        self.t1t.append(t); self.t1a.append(a)
         
         # zaktualizuj krzywe
         self.pl1.setData(self.t1t, self.t1a)
-        self.pl2.setData(self.t1t, self.t2y)
-        self.pl3.setData(self.t1t, self.t3y)
 
     @QtCore.pyqtSlot(bool)
     def on_parking_change(self, is_parking):
         self.running = is_parking
         if is_parking:
-            self.show()
+            #self.show()
+            self.showMaximized()
         else:
             del self.t1t[:]
             del self.t1a[:]
-            del self.t2y[:]
-            del self.t3y[:]
             self.hide()
 
 class YawKappaView(pg.GraphicsLayoutWidget):   
@@ -254,7 +314,8 @@ class YawKappaView(pg.GraphicsLayoutWidget):
             self.delta_plot.ref.setData([], [])
 
         if is_parking:
-            self.show()
+            #self.show()
+            self.showMaximized()
         else:
             self.hide()
 
@@ -308,6 +369,7 @@ class TrajView(pg.GraphicsLayoutWidget):
         self.spots_items = []
         self.text_items = []
         self.yolo_rect_items = []
+        self.path_car_item = None
         # dla rysowania stożków
         self.sensor_cones = {}  
         self.cone_pen = pg.mkPen(
@@ -392,7 +454,7 @@ class TrajView(pg.GraphicsLayoutWidget):
                     print("[TrajView] Kliknięto w miejsce:", item.spot_data['center'])
                     self.controller.goal_pose = (item.spot_data['target_rear_axle'][0],item.spot_data['target_rear_axle'][1],item.spot_data['orientation'])
                     self.controller.state = "waiting_for_confirm_start"
-                    print("[TrajView] Miejsce wybrane. Wciśnij przycisk E, aby rozpocząć planowanie")
+                    print("[TrajView] Miejsce wybrane. Wciśnij przycisk na wizualizacji, aby rozpocząć planowanie.")
                     item.setPen(pg.mkPen(color=(0, 255, 0), width=3))
                     item.setBrush(QtGui.QBrush(QtGui.QColor(0, 200, 0, 100)))
                     break # Znaleziono, przerywamy pętlę
@@ -471,10 +533,13 @@ class TrajView(pg.GraphicsLayoutWidget):
             center_x,center_y = obstacle['center'][0],obstacle['center'][1]
             leng,wid,ang = obstacle['length'],obstacle['width'],obstacle['angle']
             obs = self.make_rect(center_x,center_y,leng,wid,ang)
-            if obstacle['is_car']:
-                color = QtGui.QColor(119,181,156,160)  # zielony
+
+            is_car = obstacle.get('is_car', False)
+            if is_car:
+                color = QtGui.QColor(119,181,156,160)
             else:
                 color = QtGui.QColor(180,180,180,80)
+            
             obs.setBrush(QtGui.QBrush(color))
             self.obstacle_items.append(obs)
             
@@ -529,6 +594,7 @@ class TrajView(pg.GraphicsLayoutWidget):
             self.view_trajectory.addItem(self.path_car_item)
             self.path_car_inserted = True
         self.transform_car_item(self.path_car_item,pose)
+
     @QtCore.pyqtSlot(object)
     def draw_path(self, path):
         """
@@ -558,9 +624,9 @@ class TrajView(pg.GraphicsLayoutWidget):
         Dla wizualizacji ekspansji węzłów w Hybrid-A*
         """
         car_item = self.make_car()
-        pen = pg.mkPen(None)
+        pen = pg.mkPen(color=(0,0,0),width=1)
         car_item.setPen(pen)
-        car_item.setBrush(QtGui.QBrush(QtGui.QColor(220, 220, 220, 10)))
+        car_item.setBrush(QtGui.QBrush(QtGui.QColor(220, 220, 220, 100)))
         car_item.setZValue(-10) 
         self.transform_car_item(car_item,car_pos)
         self.view_trajectory.addItem(car_item)
@@ -605,11 +671,17 @@ class TrajView(pg.GraphicsLayoutWidget):
         self.view_trajectory.addItem(self.hmap_item)
         print("[TrajView] Mapa heurystyki narysowana.")
 
+    # def keyPressEvent(self, ev):
+    #     if ev.key() == 69: # klawisz E
+    #         self.controller.recorder.save_plots()
+    #         self.controller.recorder.add_metrics(self.controller.last_metrics)
+
     @QtCore.pyqtSlot(bool)
     def on_parking_change(self, is_parking):
         self.running = is_parking
         if is_parking:
-            self.show()
+            #self.show()
+            self.showMaximized()
         else:
             self.t1x.clear(); self.t1y.clear()
             self.t2x.clear(); self.t2y.clear()
@@ -624,7 +696,7 @@ class TrajView(pg.GraphicsLayoutWidget):
                 self.view_trajectory.removeItem(left)
                 self.view_trajectory.removeItem(right)
             self.sensor_cones.clear()
-
+            self.view_trajectory.removeItem(self.path_car_item)
             self.hide()
 
 class SensorView(pg.GraphicsLayoutWidget):
@@ -1234,7 +1306,8 @@ class SensorView(pg.GraphicsLayoutWidget):
     def on_parking_change(self, is_parking):
         self.running = is_parking
         if is_parking:
-            self.show()
+            #self.show()
+            self.showMaximized()
 
 
 
@@ -1333,7 +1406,7 @@ class MainWindow(QtWidgets.QWidget):
 
         layout.addLayout(bottom)
 
-        # Połącz sygnały
+        # SYGNAŁY
         self.controller.stateUpdated.connect(self.on_state_changed)
         #self.controller.segmentProgressUpdated.connect(self.progress_arrow.set_progress)
         btn_plan_state = self.state == "waiting_for_confirm_start"
@@ -1468,7 +1541,8 @@ class MainWindow(QtWidgets.QWidget):
             "executing": "Ścieżka znaleziona! Proszę się poruszać zgodnie z sygnałami...",
             "drive_forward": "Jedź do przodu.",
             "drive_backward": "Jedź do tyłu.",
-            "stop_for_change": "Zatrzymaj się.",
+            "stop_for_change": "Skręć koła.",
+            "stop_at_end": "Zatrzymaj się.",
             "parking_finished": "Parkowanie ukończone. Proszę wyłączyć asystent parkowania."
         }
         

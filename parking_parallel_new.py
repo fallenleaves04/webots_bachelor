@@ -12,8 +12,10 @@ from ultralytics import YOLO
 import pandas as pd
 import os
 import time
+import pyqtgraph as pg
+from pyqtgraph.exporters import ImageExporter
 
-sys.path.append(r"D:\\User Files\\BACHELOR DIPLOMA\\Kod z Github (rozne algorytmy)")
+#sys.path.append(r"D:\\User Files\\BACHELOR DIPLOMA\\Kod z Github (rozne algorytmy)")
 
 #from PIL import Image
 # --------------------- Stałe ---------------------
@@ -99,15 +101,15 @@ def set_speed(kmh,driver):
     global speed
     speed = min(kmh, MAX_SPEED)
     driver.setCruisingSpeed(speed)
-    print(f"Ustawiono prędkość {speed} km/h")
+    #print(f"Ustawiono prędkość {speed} km/h")
 
 def set_steering_angle(wheel_angle,driver):
     global steering_angle,manual_steering
-    wheel_angle = max(min(wheel_angle, C.MAX_WHEEL_ANGLE), -C.MAX_WHEEL_ANGLE)
+    wheel_angle = max(min(wheel_angle, C.MAX_WHEEL_ANGLE + 0.05), -C.MAX_WHEEL_ANGLE - 0.05)
     steering_angle = wheel_angle
     driver.setSteeringAngle(steering_angle)
     manual_steering = steering_angle / 0.02 
-    #print(f"Skręcam {steering_angle} rad")
+    print(f"Skręcam {steering_angle} rad")
 
 def change_manual_steering_angle(inc,driver):
     global manual_steering
@@ -172,6 +174,126 @@ left_mirror_T = np.load("matrices/camera_left_mirror_T_global.npy").astype(np.fl
 dists = []
 max_min_dict = {}
 
+class ExpRecorder:
+    # dla zapisywania do tabel, plików, plotów *.png
+    def __init__(self, controller, output_dir="obr_do_spr\\proby parkowania NOWE"):
+        
+        self.ctrl = controller
+        self.output_dir = output_dir
+
+        self.run_id = 1
+        self.metrics_runs = []
+
+        # foldery
+        self.plots_dir = os.path.join(output_dir, "wykresy")
+        self.tables_dir = os.path.join(output_dir, "tabele")
+        os.makedirs(self.plots_dir, exist_ok=True)
+        os.makedirs(self.tables_dir, exist_ok=True)
+
+    def register_views(self, *, traj=None, speed=None, angle_yaw=None, angle_delta=None, yaw_kappa=None):
+        self.traj_view:vis.TrajView = traj
+        self.speed_view:vis.SpeedView = speed
+        self.angle_yaw:vis.AngleView1 = angle_yaw
+        self.angle_delta:vis.AngleView2 = angle_delta
+        self.yaw_kappa:vis.YawKappaView = yaw_kappa
+
+    def _save_plot(self, plot_item: pg.PlotItem, filename, size_px=1600):
+        vb = plot_item.getViewBox()
+        vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+        vb.autoRange(padding=0.05)
+
+        exporter = ImageExporter(plot_item)
+        exporter.parameters()['width'] = size_px
+        exporter.parameters()['height'] = size_px
+        exporter.parameters()['antialias'] = True
+
+        exporter.export(filename)
+    
+    def save_plots(self):
+        tag = f"run_{self.run_id}"
+
+        if self.traj_view:
+            self._save_plot(
+                self.traj_view.view_trajectory,
+                f"{self.plots_dir}/trajectory_{tag}.png"
+            )
+
+        if self.speed_view:
+            self._save_plot(
+                self.speed_view.view_speed,
+                f"{self.plots_dir}/speed_{tag}.png"
+            )
+
+        if self.angle_yaw:
+            self._save_plot(
+                self.angle_yaw.view_angle,
+                f"{self.plots_dir}/angle_{tag}.png"
+            )
+
+        if self.angle_delta:
+            self._save_plot(
+                self.angle_delta.view_angle,
+                f"{self.plots_dir}/angle_{tag}.png"
+            )
+
+        if self.yaw_kappa:
+            self._save_plot(
+                self.yaw_kappa.error_plot,
+                f"{self.plots_dir}/error_s_run_{self.run_id}.png"
+            )
+        print(f"[Recorder] Zapisano wykresy dla {tag}")
+    
+    def add_metrics(self, metrics: dict):
+        self.metrics_runs.append(metrics)
+        self._write_latex_table()
+        self.run_id += 1
+
+    def _write_latex_table(self):
+        cols = len(self.metrics_runs)
+
+        def fmt(x, nd=3):
+            if isinstance(x, float):
+                return f"{x:.{nd}f}".replace('.', ',')
+            return str(x)
+
+        rows = [
+            ("$L_s$ [m]", "path_length"),
+            ("$N_s$", "segments"),
+            ("$\\over\\{e_r\\}$ [m]", "mean_er"),
+            ("$\\Delta x$ [m]", "x_err"),
+            ("$\\Delta y$ [m]", "y_err"),
+            ("$\\Delta \\psi$ [$^\\circ$]",
+             lambda m: np.degrees(m["yaw_err"])),
+            ("$T_p$ [s]", "time"),
+            ("$\\over{v}$ [m/s]", "mean_speed"),
+        ]
+
+        path = f"{self.tables_dir}/wyniki_tabela.tex"
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\\begin{table}[H]\n\\centering\n")
+            f.write("\\caption{Wyniki parkowania}\n")
+            f.write("\\label{tab:parking}\n")
+
+            f.write("\\begin{tabular}{p{6.5cm}" + " c"*cols + "}\n")
+            f.write("\\toprule\n")
+
+            f.write("\\textbf{Wielkość}")
+            for i in range(cols):
+                f.write(f" & \\textbf{{Próba {i+1}}}")
+            f.write("\\\\\n\\midrule\n")
+
+            for label, key in rows:
+                f.write(label)
+                for run in self.metrics_runs:
+                    val = key(run) if callable(key) else run[key]
+                    f.write(f" & {fmt(val)}")
+                f.write("\\\\\n")
+
+            f.write("\\bottomrule\n\\end{tabular}\n\\end{table}\n")
+
+        print(f"[Recorder] Zapisano tabelę LaTeX ({cols} prób)")
+
+
 # dla wizualizacji, pokazywania okien i przesyłania danych
 class VisController(vis.QtCore.QObject):
 
@@ -202,21 +324,24 @@ class VisController(vis.QtCore.QObject):
         self.planning_active = False  
         self.stopped = False
         self.path : Path = None
+        # timer dla zatrzymania się przed planowaniem
         self.timer = 0
-        
+        # strona i typ miejsca
         self.side = "right"
         self.find_type = "parallel"
-
+        # timer dla ukończenia parkingu
         self.finish_timer = 0.0
         self.parking_finished = False
-
+        # szukanie miejsc
         self.found_spot = False
         self.found_another_spot = False
-
+        # żeby nie ustawiać czujników kilka razy i nie przekazywać słowników
         self.sensors_set = False
         self.sensor_names = None
         self.sensor_poses = None
-
+        # dla zapisu logów i plotów
+        self.recorder = None
+        # sygnały
         self.sensorStats.connect(self.receive_sensor_stats)
 
     @vis.QtCore.pyqtSlot(dict, dict)
@@ -229,6 +354,7 @@ class VisController(vis.QtCore.QObject):
     def toggle_parking(self):
         self.parking = not self.parking
         self.timer = 0.0
+        self.v_set = 0.0
         if self.state == "inactive":
             self.state = "inactive_waiting"
         else:
@@ -238,6 +364,7 @@ class VisController(vis.QtCore.QObject):
             self.pathUpdated.emit(Path([], [], [], [], [], []))
             self.state = "inactive"
             self.sensors_set = False
+            
         self.parkingToggled.emit(self.parking)
         self.stateUpdated.emit(self.state)
    
@@ -283,11 +410,21 @@ class MainWorker(vis.QtCore.QObject):
         self.writeParkingPose = False
         self.planning_thread = None
         self.delta_tracked = 0.0
+        self.executing_maneuver = False
+        self.steer_hold_timer = 0.0
+        self.STEER_HOLD_TIME = 0.2
+        self.v_set = 0.0
 
         self.main_window = main_window
 
         self.prev_time = driver.getTime()
         self.prev_real = time.time()
+
+        self.t_plan_1 = driver.getTime()
+        self.t_plan_2 = driver.getTime()
+
+        self.t_real_plan_1 = time.time()
+        self.t_real_plan_2 = time.time()
 
         
     def _load_or_save_pose(self, name, Tp_s, target_dict):
@@ -351,6 +488,8 @@ class MainWorker(vis.QtCore.QObject):
     def start_planning_thread(self,ogm):
         
         print("[MainWorker] Uruchamiam wątek planowania")
+        self.t_plan_1 = driver.getTime()
+        self.t_real_plan_1 = time.time()
         self.planning_worker = PlanningWorker(self.controller,ogm)
         self.planning_thread = vis.QtCore.QThread()
         self.planning_worker.moveToThread(self.planning_thread)
@@ -373,9 +512,15 @@ class MainWorker(vis.QtCore.QObject):
     @vis.QtCore.pyqtSlot(bool)
     def planning_finished(self,success):
         self.controller.planning_active = False
+        self.executing_maneuver = success
         if success:
-            self.set_state("executing")
+            self.t_plan_2 = driver.getTime()
+            self.t_real_plan_2 = time.time()
+            print(f"[PlanningWorker] Czas na planowanie driver: {self.t_plan_2 - self.t_plan_1} s, real: {self.t_real_plan_2 - self.t_real_plan_1} s") 
+            print(f"[PlanningWorker] Długość ścieżki: {self.controller.path.s[-1]}")
+            self.set_state("stop_for_change")
         else:
+            
             self.set_state("searching")
             
 
@@ -472,69 +617,19 @@ class MainWorker(vis.QtCore.QObject):
         park_poses = {}
 
         def check_keyboard(cont:VisController):
-            
             nonlocal last_key_time
             key = keyboard.getKey()
-            #gear = driver.getGear()
-            
             if key == Keyboard.UP:
                 set_speed(speed + 0.5,driver)
-                # if gear >= 0:
-                #     if speed >= 0.0 and speed < 6.0:
-                #         driver.setGear(1)
-                #         driver.setThrottle(1.0)
-                #         driver.setBrakeIntensity(0.0)
-                #     elif speed >= 6.0 and speed < 24.0:
-                #         driver.setGear(2)
-                #         driver.setThrottle(1.0)
-                #         driver.setBrakeIntensity(0.0)
-                #     elif speed >= 24.0 and speed < 40.0:
-                #         driver.setGear(3)
-                #         driver.setThrottle(1.0)
-                #         driver.setBrakeIntensity(0.0)
-                #     elif speed >= 40.0 and speed < 70.0:
-                #         driver.setGear(4)
-                #         driver.setThrottle(1.0)
-                #         driver.setBrakeIntensity(0.0)
-                # elif gear == -1:
-                #     driver.setThrottle(0.0)
-                #     driver.setBrakeIntensity(1.0)
 
             elif key == Keyboard.DOWN:
                 set_speed(speed - 0.5,driver)
 
-                # if gear == -1:
-                #     driver.setThrottle(1.0)
-                #     driver.setBrakeIntensity(0.0)
-                # elif gear > 0:
-                #     driver.setThrottle(0.0)
-                #     driver.setBrakeIntensity(1.0)
-
-
             if key == Keyboard.RIGHT:
                 change_manual_steering_angle(+2.0,driver)
+
             elif key == Keyboard.LEFT:
                 change_manual_steering_angle(-2.0,driver)
-            # elif key in (ord('p'),ord('P')):
-            #     cont.toggle_parking()
-            #     if cont.parking:
-            #         print("[MainWorker] Rozpoczęto parking")
-            #     else:
-            #         cv2.destroyAllWindows()
-            #         print("[MainWorker] Ukończono parking")
-            # elif key in (ord('e'),ord('E')):
-            #     if cont.parking and self.controller.state == "waiting_for_confirm_start" and self.controller.stopped:
-            #         self.controller.timer = 0.0
-            #         self.controller.state = "planning"
-            # elif key in (ord('F'),ord('f')):
-            #     driver.setGear(1)
-            #     print("Napęd do przodu")
-            # elif key in (ord('R'),ord('r')):
-            #     driver.setGear(-1)
-            #     print("Napęd do tyłu")
-            #else:
-            #     driver.setThrottle(0.0)
-            #     driver.setBrakeIntensity(0.0)
             
             elif not cont.parking:
                 self.controller.state == "inactive"
@@ -565,8 +660,6 @@ class MainWorker(vis.QtCore.QObject):
 
         model = YOLO(path_to_models + "yolov8m-seg.pt")
         
-        prev_time = driver.getTime()
-        prev_real = time.time()
         # do supervisora - POZYCJA SAMOCHODU W WEBOTS
         node_pos0 = np.zeros(3)
 
@@ -877,9 +970,12 @@ class MainWorker(vis.QtCore.QObject):
         # dla ścieżki
         init_maneuver = True
         delta_prev = 0.0
+        ind_la = None
 
         
-        class ExperimentLogger:
+         
+
+        class ExpLogger:
             def __init__(self):
                 self.reset()
 
@@ -899,6 +995,9 @@ class MainWorker(vis.QtCore.QObject):
                 self.v = []
                 self.er = []
 
+                self.x_webots = []
+                self.y_webots = []
+                self.v_webots = []
             def start(self, sim_time):
                 self.reset()
                 self.active = True
@@ -907,7 +1006,7 @@ class MainWorker(vis.QtCore.QObject):
             def stop(self):
                 self.active = False
 
-            def log(self, sim_time, *, delta, yaw_webots, yaw_odo, x, y, v, er=None):
+            def log(self, sim_time, *, delta, yaw_webots, yaw_odo, x, y, v, x_webots, y_webots, v_webots, er=None):
                 if not self.active:
                     return
 
@@ -920,50 +1019,139 @@ class MainWorker(vis.QtCore.QObject):
                 self.x.append(x)
                 self.y.append(y)
                 self.v.append(v)
+                self.x_webots.append(x_webots)
+                self.y_webots.append(y_webots)
+                self.v_webots.append(v_webots)
                 self.er.append(er)
-                
-        def compute_metrics(log:ExperimentLogger, planned_path:Path):
+            
+        def compute_metrics(log: ExpLogger, planned_path: Path):
             t = np.array(log.t)
-            x = np.array(log.x)
-            y = np.array(log.y)
-            v = np.array(log.v)
+
+            # odometria
+            x_odo = np.array(log.x)
+            y_odo = np.array(log.y)
+            v_odo = np.array(log.v)
+            yaw_odo = np.array(log.yaw_odo)
+
+            # webots (ground truth)
+            x_web = np.array(log.x_webots)
+            y_web = np.array(log.y_webots)
+            v_web = np.array(log.v_webots)
+            yaw_web = np.array(log.yaw_webots)
+
             er = np.array([e for e in log.er if e is not None])
 
-            # czas trwania
             total_time = t[-1] - t[0]
+            mean_speed = np.mean(v_odo)
+            mean_speed_err = np.mean(np.abs(v_odo - v_web))
 
-            # średnia prędkość
-            mean_speed = np.mean(np.abs(v))
-
-            # długość rzeczywistej trajektorii
-            dx = np.diff(x)
-            dy = np.diff(y)
+            dx = np.diff(x_odo)
+            dy = np.diff(y_odo)
             path_length = np.sum(np.hypot(dx, dy))
 
-            # ilość segmentów
             num_segments = len(planned_path.segments)
 
-            # średnie odchylenie od ścieżki
             mean_er = np.mean(np.abs(er)) if len(er) > 0 else np.nan
 
-            # błąd końcowy
-            x_end_err = x[-1] - planned_path.goal[0]
-            y_end_err = y[-1] - planned_path.goal[1]
-            yaw_end_err = log.yaw_odo[-1] - planned_path.goal[2]
+            pos_err = np.hypot(x_odo - x_web, y_odo - y_web)
+            mean_pos_err = np.mean(pos_err)
+            mean_x_err = np.mean(np.abs(x_odo - x_web))
+            mean_y_err = np.mean(np.abs(y_odo - y_web))
+
+            yaw_err = np.array([mod2pi(a - b) for a, b in zip(yaw_odo, yaw_web)])
+            mean_yaw_err = np.mean(np.abs(yaw_err))
+
+            x_end_err = x_odo[-1] - planned_path.goal[0]
+            y_end_err = y_odo[-1] - planned_path.goal[1]
+            yaw_end_err = mod2pi(yaw_odo[-1] - planned_path.goal[2])
 
             return {
                 "path_length": path_length,
                 "segments": num_segments,
+                "time": total_time,
+
+                # śledzenie
                 "mean_er": mean_er,
+
+                # Webots vs Odometria
+                "mean_pos_err": mean_pos_err,
+                "mean_x_err_webots": mean_x_err,
+                "mean_y_err_webots": mean_y_err,
+                "mean_speed_err": mean_speed_err,
+                "mean_yaw_err": mean_yaw_err,
+
+                # końcowe
                 "x_err": x_end_err,
                 "y_err": y_end_err,
                 "yaw_err": yaw_end_err,
-                "time": total_time,
-                "mean_speed": mean_speed
+                "mean_speed": mean_speed,
             }
 
-        self.exp_logger = ExperimentLogger()
+        self.exp_logger = ExpLogger()
         write_logs = True
+
+        def plot_kdtree_query_debug(obstacles, kd_tree, car_pose, car_L, car_W,
+                            max_obs_radius, margin=0.1, out_path="kdtree_query.png"):
+            import matplotlib.pyplot as plt
+            from matplotlib.patches import Rectangle, Circle
+            """
+            obstacles: lista słowników z polami:
+                - center: (cx, cy)
+                - length, width
+                - yaw (opcjonalnie) -> jeśli brak, rysujemy AABB
+            car_pose: (x, y, yaw) - najlepiej środek auta albo rear-axle (spójnie z Twoim plannerem)
+            """
+            x, y, yaw = car_pose
+
+            # promień auta jako półprzekątna (bezpieczny)
+            car_radius = 0.5 * np.hypot(car_L, car_W)
+            rq = car_radius + max_obs_radius + margin
+
+            # broad-phase query
+            cand_idx = []
+            if kd_tree is not None and len(obstacles) > 0:
+                cand_idx = kd_tree.query_ball_point([x, y], rq)
+
+            fig, ax = plt.subplots(figsize=(8, 5))
+
+            # okrąg zapytania
+            ax.add_patch(Circle((x, y), rq, fill=False, linestyle="--", linewidth=2))
+            ax.plot([x], [y], marker="o")  # punkt zapytania
+
+            # auto jako prostokąt (osiowo, dla debug; jeśli chcesz obrót, też da się)
+            car_rect = Rectangle((x - car_L/2, y - car_W/2), car_L, car_W,
+                                    fill=False, linewidth=2)
+            ax.add_patch(car_rect)
+
+            # przeszkody
+            for i, obs in enumerate(obstacles):
+                cx, cy = obs["center"]
+                L = obs.get("length", 1.0)
+                W = obs.get("width", 1.0)
+
+                is_cand = i in cand_idx
+                rect = Rectangle((cx - L/2, cy - W/2), L, W,
+                                    fill=True, alpha=0.35 if is_cand else 0.15,
+                                    linewidth=1.5)
+                ax.add_patch(rect)
+                ax.plot([cx], [cy], marker=".", markersize=6)
+
+            ax.set_aspect("equal", adjustable="box")
+            ax.set_title("KD-tree broad-phase: query_ball_point()")
+            ax.set_xlabel("x [m]")
+            ax.set_ylabel("y [m]")
+            ax.grid(True, alpha=0.25)
+
+            # dopasuj widok
+            pad = rq + 2.0
+            ax.set_xlim(x - pad, x + pad)
+            ax.set_ylim(y - pad, y + pad)
+
+            fig.tight_layout()
+            fig.savefig(out_path, dpi=200)
+            plt.close(fig)
+            return out_path, len(cand_idx), rq
+
         while robot.step(64) != -1:
             check_keyboard(cont)
             vis.QtCore.QCoreApplication.processEvents()
@@ -1008,271 +1196,179 @@ class MainWorker(vis.QtCore.QObject):
                 yaw_webots = pose_measurements["im"][2]
                 
                 
+                if not self.executing_maneuver:
+                    if not (self.controller.planning_active or self.controller.state in ["executing","drive_forward","drive_backward","stop_for_change","stop_at_end","parking_finished"]):
+                        if self.main_window.progress_arrow.progress > 0.0:
+                            self.main_window.progress_arrow.set_progress(0.0)
+                        ogm.interpret_readings({**front_names_dists,**rear_names_dists,**left_side_names_dists,**right_side_names_dists},(x_odo,y_odo,yaw_odo))
+                        # mamy macierz grid tych wielkości; z nich trzeba przemnożyć na xy_resolution te indeksy, aby otrzymać właściwe pozycje przeszkód, są większe lub równe od 0
+                        ox,oy = ogm.extract_obstacles()
+                        #ox,oy = [],[]
+                        find_type = self.controller.find_type
+                        side = self.controller.side
+                        type_changed = old_type != find_type
+                        if type_changed:
+                            self.set_state(f"searching_{side}_{find_type}")
+                            old_type = find_type
+                        
+                        if self.controller.side == "right":
+                            names_yolo = ["camera_front_right","camera_right_mirror"]
+                        else:
+                            names_yolo = ["camera_front_right","camera_left_mirror"]
+                        #names_yolo = ["camera_front_right","camera_left_mirror","camera_right_mirror"]
+                        for name in names_yolo:  
+                            image = names_images[name].copy()
+                            results = model(image,half=True,device = 0,classes=[2,5,7],conf=0.6,verbose=False,imgsz=(640,480))
+                            if results is not None:
+                                for box in results[0].boxes.xyxy.cpu().numpy():  # [x1,y1,x2,y2]
+                                    x1, y1, x2, y2 = map(int, box)
+                                    cv2.rectangle(image, (x1,y1), (x2,y2), (0,255,0), 2)
+                                    x,y = (x1+x2)/2,y2
+                                    T_center_to_camera = right_mirror_T if name == "camera_right_mirror" \
+                                        else left_mirror_T if name == "camera_left_mirror" \
+                                        else front_right_T if name == "camera_front_right" else None
 
-                if not (self.controller.planning_active or self.controller.state in ["executing","drive_forward","drive_backward","stop_for_change","parking_finished"]):
-                    if self.main_window.progress_arrow.progress > 0.0:
-                        self.main_window.progress_arrow.set_progress(0.0)
-                    ogm.interpret_readings({**front_names_dists,**rear_names_dists,**left_side_names_dists,**right_side_names_dists},(x_odo,y_odo,yaw_odo))
-                    # mamy macierz grid tych wielkości; z nich trzeba przemnożyć na xy_resolution te indeksy, aby otrzymać właściwe pozycje przeszkód, są większe lub równe od 0
-                    ox,oy = ogm.extract_obstacles()
-                    #ox,oy = [],[]
-                    find_type = self.controller.find_type
-                    side = self.controller.side
-                    type_changed = old_type != find_type
-                    if type_changed:
-                        self.set_state(f"searching_{side}_{find_type}")
-                        old_type = find_type
+                                    pt = sy.pixel_to_world(x,y,cam_matrices[name],T_center_to_camera=T_center_to_camera) # punkty w układzie samochodu
+                                    if abs(pt[0]) < C.CAR_LENGTH - 0.9 and abs(pt[1]) < C.CAR_WIDTH/2 + 0.2:
+                                        continue
+                                    if pt is not None:
+                                        # transformować punkty yolo do układu samochodu
+                                        pt_x, pt_y = pt[0], pt[1]
+                                        pt_homogeneous = np.array([pt_x, pt_y, 1.0])
+                                        c, s = np.cos(yaw_odo), np.sin(yaw_odo)
+                                        transf = np.array([
+                                            [c, -s, x_odo],
+                                            [s,  c, y_odo],
+                                            [0,  0, 1.0]
+                                        ], dtype=np.float32)
+                                        pt_global = transf @ pt_homogeneous
+                                        ogm.yolo_points_buffer.append(pt_global[:2])
+                                        ogm.yolo_x_pts.append(pt_global[0])
+                                        ogm.yolo_y_pts.append(pt_global[1])
+                                    
+                                cv2.namedWindow(f"yolo {name}", cv2.WINDOW_NORMAL)
+                                cv2.imshow(f"yolo {name}", cv2.cvtColor(image,cv2.COLOR_BGR2RGB))
+                        
+                        spots = []
+                        if len(ox) > 0:
+                            cls = ogm.analyze_clusters((x_odo,y_odo,yaw_odo)) 
+                            #if len(cls_old) < len(cls):
+                            #cls_old = cls
+                            ogm.setup_obstacles(cls)
+                            #plot_kdtree_query_debug(ogm.obstacles,ogm.kd_tree,(x_odo,y_odo,yaw_odo),C.CAR_LENGTH,C.CAR_WIDTH,ogm.collision_radius + ogm.max_obs_radius)
+                            ogm.match_semantics_with_sat()
+                            #spots = ogm.find_spots_scanning((x_odo,y_odo,yaw_odo), find_type, side)
+                            #spots.extend(ogm.find_spots_scanning((x_odo,y_odo,yaw_odo), "perpendicular", "left"))
+                            ogm.spots = spots
+                        else:
+                            ox,oy,cls,spots = [],[],[],[]
+                    #ox,oy,cls,spots = ogm.ox,ogm.oy,ogm.obstacles,ogm.spots
                     
-                    if self.controller.side == "right":
-                        names_yolo = ["camera_front_right","camera_right_mirror"]
-                    else:
-                        names_yolo = ["camera_front_right","camera_left_mirror"]
-                    #names_yolo = ["camera_front_right","camera_left_mirror","camera_right_mirror"]
-                    for name in names_yolo:  
-                        image = names_images[name].copy()
-                        results = model(image,half=True,device = 0,classes=[2,5,7],conf=0.6,verbose=False,imgsz=(640,480))
-                        if results is not None:
-                            for box in results[0].boxes.xyxy.cpu().numpy():  # [x1,y1,x2,y2]
-                                x1, y1, x2, y2 = map(int, box)
-                                cv2.rectangle(image, (x1,y1), (x2,y2), (0,255,0), 2)
-                                x,y = (x1+x2)/2,y2
-                                T_center_to_camera = right_mirror_T if name == "camera_right_mirror" \
-                                    else left_mirror_T if name == "camera_left_mirror" \
-                                    else front_right_T if name == "camera_front_right" else None
 
-                                pt = sy.pixel_to_world(x,y,cam_matrices[name],T_center_to_camera=T_center_to_camera) # punkty w układzie samochodu
-                                if abs(pt[0]) < C.CAR_LENGTH - 0.9 and abs(pt[1]) < C.CAR_WIDTH/2 + 0.2:
-                                    continue
-                                if pt is not None:
-                                    # transformować punkty yolo do układu samochodu
-                                    pt_x, pt_y = pt[0], pt[1]
-                                    pt_homogeneous = np.array([pt_x, pt_y, 1.0])
-                                    c, s = np.cos(yaw_odo), np.sin(yaw_odo)
-                                    transf = np.array([
-                                        [c, -s, x_odo],
-                                        [s,  c, y_odo],
-                                        [0,  0, 1.0]
-                                    ], dtype=np.float32)
-                                    pt_global = transf @ pt_homogeneous
-                                    ogm.yolo_points_buffer.append(pt_global[:2])
-                                    ogm.yolo_x_pts.append(pt_global[0])
-                                    ogm.yolo_y_pts.append(pt_global[1])
-                                
-                            #cv2.namedWindow(f"yolo {name}", cv2.WINDOW_NORMAL)
-                            #cv2.imshow(f"yolo {name}", image)
                     
-                    spots = []
-                    if len(ox) > 0:
-                        cls = ogm.analyze_clusters((x_odo,y_odo,yaw_odo)) 
-                        #if len(cls_old) < len(cls):
-                        #cls_old = cls
-                        ogm.setup_obstacles(cls)
-                        ogm.match_semantics_with_sat()
-                        spots = ogm.find_spots_scanning((x_odo,y_odo,yaw_odo), find_type, side)
-                        #spots.extend(ogm.find_spots_scanning((x_odo,y_odo,yaw_odo), "perpendicular", "left"))
-                        ogm.spots = spots
-                    else:
-                        ox,oy,cls,spots = [],[],[],[]
-                #ox,oy,cls,spots = ogm.ox,ogm.oy,ogm.obstacles,ogm.spots
-                
-
-                
 
 
-                # dalej planowanie i sterowanie 
+                    # dalej planowanie i sterowanie 
 
 
-                p1 = (x_odo,y_odo,yaw_odo)
-                p2,_ = ogm.choose_spot(p1)
-                
-                if 'searching' in self.controller.state and p2 is not None:
-                    self.controller.found_spot = True
-                    target_spot = p2
-                    self.set_state("found_spot")
-                    print("[MainWorker] Znaleziono miejsce! Proszę się zatrzymać.")
-                elif self.controller.state not in ["executing","stop_for_change","drive_forward","drive_backward"] and self.controller.found_spot and p2 is None:
-                    self.set_state("return_searching")
-                    self.controller.found_spot = False
-                    target_spot = None
-                    print("[MainWorker] Miejsce porzucone. Poszukiwanie dalsze...")
-                if self.controller.state in ["return_searching"] and p2 is not None:
-                    tc = target_spot['center'] or (0,0)
-                    pc = p2['center']
-                    dist = np.hypot(pc[0] - tc[0], pc[1] - tc[1])
-                    if dist > 2.0:
-                        target_spot = p2
-                        self.set_state("found_another_spot")
-                        print("[MainWorker] Znaleziono nowe miejsce! Proszę się zatrzymać.")
-
-                if (self.controller.found_spot or self.controller.found_another_spot) and self.controller.state in ["found_spot","found_another_spot"]:
-                    if abs(sp_odo) <= 1e-4:
-                        self.controller.timer += dt_real
-                    self.controller.stopped = True if self.controller.timer >= 1.0 and abs(sp_odo) <= 1e-4 else False
-                    if self.controller.stopped:  
-                        self.set_state("waiting_for_confirm_start")
-                        print("[MainWorker] Proszę wcisnąć przycisk E aby rozpocząć parkowanie.")
-
-                if not self.controller.planning_active and self.controller.state == "planning" and self.controller.stopped:
                     p1 = (x_odo,y_odo,yaw_odo)
-                    target_spot,_ = ogm.choose_spot(p1)
-                    self.exp_logger.start(driver.getTime())
-                    self.controller.start_pose = p1
-                    self.controller.planning_active = True
-                    self.set_state("planning")
-                    self.controller.goal_pose = (target_spot['target_rear_axle'][0],
-                                                    target_spot['target_rear_axle'][1],
-                                                    target_spot['orientation'])
-                    try:
-                        self.start_planning_thread(ogm)
-                    except:
-                        print("[MainWorker] Nie udało się uruchomić planowania.")   
-
-                if self.controller.state in ["drive_forward", "drive_backward", "executing", "stop_for_change"]:
-    
-                    x, y, yaw, v = x_odo, y_odo, yaw_odo, sp_odo
-                    self.planned_path = self.controller.path or Path([], [], [], [], [])
+                    p2,_ = ogm.choose_spot(p1)
                     
-                    # Pure pursuit tracking, potrzebne w stop_for_change
-                    theta_e, er, _, _, ind_nearest = self.planned_path.calc_theta_e_and_er(x, y, yaw)
-                    delta_pp,ind,_ = self.planned_path.pure_pursuit(x, y, yaw, v, ld=0.5)
-                    #delta_pp = np.clip(-delta_pp,-C.MAX_WHEEL_ANGLE - 0.05,C.MAX_WHEEL_ANGLE + 0.05)
-                    delta_rw,ind,changed = self.planned_path.rear_wheel_feedback_control(x,y,v,yaw)
-                    #delta_rw = np.clip(-delta_rw,-C.MAX_WHEEL_ANGLE - 0.05,C.MAX_WHEEL_ANGLE + 0.05)
-                    
-                    # Segmenty - WSPÓLNE dla wszystkich stanów
-                    seg_start, seg_end = self.planned_path.get_segment_bounds()
-                    s_start = self.planned_path.s[seg_start]
-                    s_now = self.planned_path.s[ind_nearest]
-                    s_end = self.planned_path.s[seg_end]
-                    dir_seg = self.planned_path.directions[seg_start]
+                    if 'searching' in self.controller.state and p2 is not None:
+                        self.controller.found_spot = True
+                        target_spot = p2
+                        self.set_state("found_spot")
+                        print("[MainWorker] Znaleziono miejsce! Proszę się zatrzymać.")
+                    elif self.controller.state not in ["executing","stop_for_change","stop_at_end","drive_forward","drive_backward","parking_finished"] and self.controller.found_spot and p2 is None:
+                        self.set_state("return_searching")
+                        self.controller.found_spot = False
+                        target_spot = None
+                        print("[MainWorker] Miejsce porzucone. Poszukiwanie dalsze...")
+                    if self.controller.state in ["return_searching"] and p2 is not None:
+                        tc = target_spot['center'] or (0,0)
+                        pc = p2['center']
+                        dist = np.hypot(pc[0] - tc[0], pc[1] - tc[1])
+                        if dist > 2.0:
+                            target_spot = p2
+                            self.set_state("found_another_spot")
+                            print("[MainWorker] Znaleziono nowe miejsce! Proszę się zatrzymać.")
 
-                    if (seg_end - ind_nearest) <= 2:
-                        self.planned_path.ind_la = seg_end
-                        if self.planned_path.segment_hold:
-                            self.planned_path.segment_hold = False
-                            changed = self.planned_path.advance_segment()
+                    if (self.controller.found_spot or self.controller.found_another_spot) and self.controller.state in ["found_spot","found_another_spot"]:
+                        if abs(sp_odo) <= 1e-4:
+                            self.controller.timer += dt_real
+                        self.controller.stopped = True if self.controller.timer >= 1.0 and abs(sp_odo) <= 1e-4 else False
+                        if self.controller.stopped:  
+                            self.set_state("waiting_for_confirm_start")
+                            print("[MainWorker] Proszę wcisnąć odpowiedni przycisk, aby rozpocząć parkowanie.")
 
-                    # Progress bar
-                    progress = (s_now - s_start) / max(s_end - s_start, 1e-6)
-                    progress = np.clip(progress, 0.0, 1.0)
-                    self.main_window.progress_arrow.set_progress(progress)
-                    
-                    # Rate limiting kierownicy
-                    #w = smooth_weight(progress)
-                    def compute_blending_weight(
-                        er, theta_e, dist_to_end,
-                        e_ref=0.1,
-                        theta_ref=np.deg2rad(1.0),
-                        d_ref=0.5,
-                        w_e=0.4,
-                        w_theta=0.4,
-                        w_d=0.2
-                    ):
-                        # Normalizacja błędów
-                        e_norm = np.clip(abs(er) / e_ref, 0.0, 1.0)
-                        theta_norm = np.clip(abs(theta_e) / theta_ref, 0.0, 1.0)
-                        d_norm = np.clip(dist_to_end / d_ref, 0.0, 1.0)
+                    if not self.controller.planning_active and self.controller.state == "planning" and self.controller.stopped:
+                        p1 = (x_odo,y_odo,yaw_odo)
+                        target_spot,_ = ogm.choose_spot(p1)
+                        self.exp_logger.start(driver.getTime())
+                        self.controller.start_pose = p1
+                        self.controller.planning_active = True
+                        self.set_state("planning")
+                        self.controller.goal_pose = (target_spot['target_rear_axle'][0],
+                                                        target_spot['target_rear_axle'][1],
+                                                        target_spot['orientation'])
+                        try:
+                            
+                            self.start_planning_thread(ogm)
+                        except:
+                            print("[MainWorker] Nie udało się uruchomić planowania.")   
 
-                        # Obliczenie trudności
-                        difficulty = w_e * e_norm + w_theta * theta_norm + w_d * d_norm
-                        difficulty = np.clip(difficulty, 0.0, 1.0)
-
-                        # Obliczenie wagi rear-wheel feedback
-                        w_rw_raw = 1.0 - difficulty
-                        w_rw = w_rw_raw * w_rw_raw * (3.0 - 2.0 * w_rw_raw)  # smoothstep
-
-                        return w_rw
-
-                    dist_to_end = max(0.0, s_end - s_now)
-                    w = compute_blending_weight(er,theta_e,dist_to_end)
-                    w = 0.0
-                    #print(f"Bieżąca waga na skręt: {w}") # większa - większy wpływ rear wheel feedback
-                    self.delta_tracked = (1-w) * delta_pp + w * delta_rw
-                    self.delta_tracked = np.clip(-self.delta_tracked,-C.MAX_WHEEL_ANGLE + 0.05,C.MAX_WHEEL_ANGLE - 0.05)
-                    max_rate = 1.25
-                    delta_cmd = np.clip(self.delta_tracked, delta_prev - max_rate*dt_sim, delta_prev + max_rate*dt_sim)
-                    delta_prev = delta_cmd
-                    set_steering_angle(delta_cmd, driver)
-
-                    # Statystyki
-                    kappa = np.nan if abs(v) < 1e-3 else yaw_rate / abs(v)
-                    stats = [er, delta_meas, kappa, ind_nearest]
-                    self.funcCarData.emit(stats)
-                    tracked_pose = (self.planned_path.xs[ind], self.planned_path.ys[ind], self.planned_path.yaws[ind])
-                    self.pathCarData.emit(tracked_pose)
-
+                # dać takie stany, żeby samochód się zatrzymał dopiero kiedy błąd wzdłużny przekroczy jakiś próg
+                # potem po zatrzymaniu się samochód czeka na przekręcenie kół i dopiero wtedy zmienia segment
 
                 if self.controller.state != "parking_finished":
                     traj_to_send = [[x_odo,y_odo,yaw_odo],node_pos,[ogm.ox,ogm.oy],ogm.obstacles,ogm.spots,[ogm.yolo_x_pts,ogm.yolo_y_pts]]
                     
                     traj_data = traj_to_send 
-                    speed_data = [now,sp_odo,node_vel_x]
+                    
                     angle_data = [now,delta_meas,psi,yaw_webots]
                     
                     self.poseData.emit(pose_measurements)
                     self.trajData.emit(traj_data)
-                    self.speedData.emit(speed_data)
+                    #speed_data = [now,sp_odo,node_vel_x]
+                    #self.speedData.emit(speed_data)
                     self.angleData.emit(angle_data)
 
-                if self.controller.state == "stop_for_change":
-                    ###
-                    # Stan oczekiwania na wykręcenie kół po zmianie segmentu.
-                    # Samochód stoi, koła się kręcą do delta_tracked.
-                    ###
-                    set_speed(0.0, driver)
-                    delta_meas *= -1 
-                    delta_error = abs(delta_meas - self.delta_tracked)
-                    
-                    # Debug co 100ms
-                    if int(driver.getTime() * 10) % 10 == 0:
-                        print(f"[StopForChange] Czekam na koła: delta_error={delta_error:.4f} rad ({np.degrees(delta_error):.2f}°)")
-                        print(f"              delta_meas={delta_meas:.4f}, delta_tracked={self.delta_tracked:.4f}")
-                    
-                    if delta_error < 0.03:  # tolerancja ~3°
-                        # Kąt wykręcony, przejdź do odpowiedniego stanu
-                        if dir_seg > 0:
-                            self.set_state("drive_forward")
-                        else:
-                            self.set_state("drive_backward")
-                        print(f"[MainWorker] Koła wykręcone (error={delta_error:.4f}), kontynuuj segment: {self.controller.state}")
-                    
-                    continue #nie wykonuj reszty pętli
+                
+                def rate_limit(target, prev, rate, dt):
+                    return np.clip(target, prev - rate*dt, prev + rate*dt)
+
+                LD_PP = 0.9
+                STEER_RATE = 1.25
+                END_TOLER = 0.05
+                V_STOP_TOL = 5e-2
+                DELTA_TOL = 0.02
+                NEXT_SEG_PEEK = 5 
 
 
-                elif self.controller.state in ["drive_forward", "drive_backward", "executing"]:
-                    
-                    # Detekcja zmiany segmentu
-                    if init_maneuver or changed:
-                        self.planned_path.v_cmd_prev = 0.0
-                        init_maneuver = False
-                        
-                        print(f"[MainWorker] Zmiana segmentu wykryta (changed={changed}), przełączam na stop_for_change")
-                        self.set_state("stop_for_change")
-                        set_speed(0.0, driver)
-                        continue
-                    
-                    # Prędkość docelowa
-                    v_cmd = dir_seg * C.MAX_SPEED
-                    if abs(er) > 0.02:
-                        v_cmd *= 0.5
-                    
-                    # Oblicz odległości i błędy
-                    dist_to_end = max(0.0, s_end - s_now)
-                    e_long = self.planned_path.get_longitudinal_error(x, y, seg_end)
-                    
-                    # # Debug co 500ms
-                    # if int(driver.getTime() * 2) % 2 == 0:
-                    #     print(f"[Executing] dist_to_end={dist_to_end:.3f}, e_long={e_long:.3f}, er={er:.3f}")
-                    
-                    # Regulator prędkości
-                    v_set = self.planned_path.speed_control(
-                        v_cmd, v, dist_to_end, e_long, self.delta_tracked, dt_sim,
-                        kp_long=0.005,
-                        e_long_thresh=0.2
-                    )
-                    set_speed(v_set, driver)
-                    
-                    # Logging
+                if self.executing_maneuver:
+
+                    x, y, yaw, v = x_odo, y_odo, yaw_odo, sp_odo
+                    v_webots = node_vel_x
+                    x_webots = node_pos[0] 
+                    y_webots = node_pos[1]
+                    yaw_webots = yaw_webots
+
+                    self.planned_path = self.controller.path or Path([], [], [], [], [])
+
+                    # ===== wspólne =====
+                    seg_start, seg_end = self.planned_path.get_segment_bounds()
+                    theta_e, er, _, _, ind_nearest = self.planned_path.calc_theta_e_and_er(x, y, yaw)
+
+                    s_start = self.planned_path.s[seg_start]
+                    s_end = self.planned_path.s[seg_end]
+                    s_now = self.planned_path.s[ind_nearest]
+                    dir_seg = self.planned_path.directions[seg_start]
+
+                    # progress
+                    progress = (s_now - s_start) / max(abs(s_end - s_start), 1e-6)
+                    progress = np.clip(progress, 0.0, 1.0)
+                    self.main_window.progress_arrow.set_progress(progress)
+
                     self.exp_logger.log(
                         driver.getTime(),
                         delta=delta_meas,
@@ -1281,32 +1377,180 @@ class MainWorker(vis.QtCore.QObject):
                         x=x_odo,
                         y=y_odo,
                         v=sp_odo,
+                        x_webots=x_webots,
+                        y_webots=y_webots,
+                        v_webots=v_webots,
                         er=er
                     )
+
+                    speed_data = [now,sp_odo,node_vel_x,self.v_set]
+                    self.speedData.emit(speed_data)
                     
-                    # Warunek zakończenia
-                    last_segment = (self.planned_path.active_segment == len(self.planned_path.segments) - 1)
-                    near_end = (seg_end - ind_nearest) <= 2
-                    low_speed = abs(sp_odo) < 5e-2
-                    ok_pos = abs(e_long) < 0.05
-                    
-                    if last_segment and near_end and low_speed and ok_pos:
-                        self.controller.finish_timer += dt_real
-                    else:
-                        self.controller.finish_timer = 0.0
-                    
-                    if self.controller.finish_timer >= 1.5:
-                        self.set_state("parking_finished")
-                        self.controller.parking_finished = True
-                        set_speed(0.0, driver)
-                        print("[MainWorker] Parkowanie zakończone!")
+                    if self.controller.state in ["drive_forward", "drive_backward"]:
+
+                        # --- steering: PURE PURSUIT ---
+                        delta_pp, ind_la = self.planned_path.pure_pursuit(x, y, yaw, v, ld=LD_PP)
+                        delta_pp = np.clip(delta_pp, -C.MAX_WHEEL_ANGLE - 0.05, C.MAX_WHEEL_ANGLE + 0.05)
+
+                        delta_cmd = rate_limit(delta_pp, delta_prev, STEER_RATE, dt_sim)
+                        delta_prev = delta_cmd
+                        set_steering_angle(delta_cmd, driver)   
+
+                        self.delta_tracked = delta_pp
+
+                        # --- speed: NIE DOTYKAMY ---
+                        dist_to_end = max(0.0, s_end - s_now)
+                        v_cmd = dir_seg * C.MAX_SPEED
+                        if abs(er) > 0.02:
+                            v_cmd *= 0.5
+
+                        self.v_set = self.planned_path.speed_control(
+                            v_cmd, v, dist_to_end, 0.0, self.delta_tracked, dt_sim
+                        )
+
+                        
+                        set_speed(self.v_set, driver)
+
+                        kappa = np.nan if abs(v) < 1e-3 else yaw_rate / abs(v)
+                        stats = [er, delta_meas, kappa, ind_nearest] # statystyki dla wysłania na widget
+                        self.funcCarData.emit(stats)
+
+                        # tracked_pose = (self.planned_path.xs[ind_la], self.planned_path.ys[ind_la], self.planned_path.yaws[ind_la]) 
+                        # self.pathCarData.emit(tracked_pose)
+
+                        at_end_geom = (seg_end - ind_nearest) <= 0 or abs(s_end - s_now) <= END_TOLER
+
+                        if at_end_geom:
+                            print("[FSM] Koniec segmentu -> STOP_AT_END")
+                            self.delta_hold = self.delta_tracked   # ZAMRAŻAMY skręt
+                            self.set_state("stop_at_end")
+
+                            print(
+                                f"[FSM->STOP_AT_END] "
+                                f"delta_tracked={self.delta_tracked:.3f}, "
+                                f"delta_prev={delta_prev:.3f}, "
+                                f"delta_meas={delta_meas:.3f}"
+                            )
+                            
                         continue
 
+                    if self.controller.state == "stop_at_end":
+
+                        # skręt ZAMROŻONY
+                        delta_cmd = rate_limit(self.delta_hold, delta_prev, STEER_RATE, dt_sim)
+                        delta_prev = delta_cmd
+                        set_steering_angle(delta_cmd, driver)
+
+                        dist_to_end = max(0.0, s_end - s_now)
+                        v_cmd = dir_seg * C.MAX_SPEED
+                        if abs(er) > 0.02:
+                            v_cmd *= 0.5
+
+                        self.v_set = self.planned_path.speed_control(
+                            v_cmd/3.6, v, dist_to_end, 0.0, self.delta_tracked, dt_sim
+                        )
+                        self.v_set *= 3.6
+                        
+                        set_speed(self.v_set, driver)
+
+                        last_segment = (self.planned_path.active_segment == len(self.planned_path.segments) - 1)
+
+                        print(
+                            f"[STOP_AT_END] v={sp_odo:.3f}, "
+                            f"v_cmd={self.v_set:.3f}, "
+                            f"delta_hold={self.delta_hold:.3f}, "
+                            f"delta_prev={delta_prev:.3f}"
+                        )
+                        # if ind_la is not None:
+                        #     tracked_pose = (self.planned_path.xs[ind_la], self.planned_path.ys[ind_la], self.planned_path.yaws[ind_la]) 
+                        #     self.pathCarData.emit(tracked_pose)
+                        
+                        if abs(sp_odo) < V_STOP_TOL:
+                            if last_segment:
+                                self.controller.finish_timer += dt_real  
+                                if self.controller.finish_timer >= 1.5:
+                                    print("[FSM] Ostatni segment -> PARKING_FINISHED (timer ok)")
+                                    self.v_set = 0.0
+                                    set_speed(self.v_set, driver)
+                                    self.set_state("parking_finished")
+                                    self.controller.parking_finished = True
+                                    self.found_spot = False
+                                    self.found_another_spot = False
+                            else:
+                                # nie ostatni segment: przejście do obracania kół
+                                self.controller.finish_timer = 0.0
+                                print("[FSM] Stoi -> STOP_FOR_CHANGE")
+                                self.v_set = 0.0
+                                set_speed(self.v_set, driver)
+                                self.set_state("stop_for_change")
+                        else:
+                            # nie stoi, reset timera
+                            if last_segment:
+                                self.controller.finish_timer = 0.0
+
+                        continue
+                    
+                    if self.controller.state == "stop_for_change":
+                        self.v_set = 0.0
+                        set_speed(self.v_set, driver)
+
+                        # 1) wybierz punkt celowania: current segment dla INIT, next segment dla NEXT
+                        if init_maneuver:
+                            cur_start, cur_end = self.planned_path.get_segment_bounds()
+                            look_idx = min(cur_start + NEXT_SEG_PEEK, cur_end)
+                        else:
+                            next_start, next_end = self.planned_path.get_next_segment_bounds()
+                            look_idx = min(next_start + NEXT_SEG_PEEK, next_end)
+
+                        tx = self.planned_path.xs[look_idx]
+                        ty = self.planned_path.ys[look_idx]
+
+                        # 2) policz delta_target (proste PP do punktu tx,ty)
+                        alpha = np.arctan2(ty - y, tx - x) - yaw
+                        delta_target = np.arctan2(
+                            2.0 * C.WHEELBASE * np.sin(alpha),
+                            max(LD_PP, 1e-3)
+                        )
+                        delta_target = np.clip(delta_target, -C.MAX_WHEEL_ANGLE - 0.05, C.MAX_WHEEL_ANGLE + 0.05)
+
+                        # 3) rate limit i komenda
+                        delta_cmd = rate_limit(delta_target, delta_prev, STEER_RATE, dt_sim)
+                        delta_prev = delta_cmd
+                        set_steering_angle(delta_cmd, driver)
+
+                        # 4) błąd - UWAGA: NIE rób delta_meas *= -1 (to niszczy zmienną!)
+                        delta_meas_eff = -delta_meas  # jeśli w Webots masz odwrócony znak pomiaru
+                        delta_error = abs(delta_meas_eff - delta_target)
+
+                        mode = "INIT" if init_maneuver else "NEXT"
+                        print(f"[FSM:{mode}] err={delta_error:.3f}, meas={delta_meas_eff:.3f}, target={delta_target:.3f}, look_idx={look_idx}")
+
+                        if delta_error < DELTA_TOL:
+                            if init_maneuver:
+                                init_maneuver = False
+                                cur_start, _ = self.planned_path.get_segment_bounds()
+                                dir_next = self.planned_path.directions[cur_start]
+                            else:
+                                self.planned_path.advance_segment()
+                                seg_start2, _ = self.planned_path.get_segment_bounds()
+                                dir_next = self.planned_path.directions[seg_start2]
+
+                            self.planned_path.v_cmd_prev = 0.0
+
+                            if dir_next > 0:
+                                self.set_state("drive_forward")
+                            else:
+                                self.set_state("drive_backward")
+
+                        continue
+                
 
                 if self.controller.state == "parking_finished" and self.controller.parking_finished:
                     self.exp_logger.stop()
                     if write_logs:
                         logs = compute_metrics(self.exp_logger,self.planned_path)
+                        #self.controller.recorder.save_plots()
+                        #self.controller.recorder.add_metrics(logs)
                         print(f"Logi po ukończeniu parkowania: {logs}")
                         write_logs = False
                     max_rate = 1.0
@@ -1314,13 +1558,17 @@ class MainWorker(vis.QtCore.QObject):
                     delta_cmd = np.clip(delta_tracked, delta_prev - max_rate*dt_sim, delta_prev + max_rate*dt_sim)
                     delta_prev = delta_cmd
                     set_steering_angle(delta_cmd,driver)
+                    self.executing_maneuver = False
                     self.main_window.progress_arrow.set_progress(0.0)
 
+
+                
 
                 cv2.waitKey(1)
             elif not cont.parking:
                 self.first_call_pose = True
                 self.first_call_traj = True
+                self.executing_maneuver = False
                 ogm = OccupancyGrid(self.controller)
                 ogm.setup_sensors(self.front_ultrasonic_sensor_poses,
                                     self.rear_ultrasonic_sensor_poses,
@@ -1337,7 +1585,9 @@ class MainWorker(vis.QtCore.QObject):
 
 
 if __name__ == "__main__":
-    app = vis.pg.QtWidgets.QApplication(sys.argv)
+    app = pg.QtWidgets.QApplication(sys.argv)
+    
+
     cont = VisController()
     
     win = vis.MainWindow(cont)
@@ -1366,17 +1616,32 @@ if __name__ == "__main__":
 
     thread.start()
 
-    #win1 = vis.SpeedView(cont)
-    #win1.hide()
+    speed_view = vis.SpeedView(cont)
+    speed_view.hide()
 
-    #win2 = vis.AngleView(cont)
-    #win2.hide()
+    angle_view_1 = vis.AngleView1(cont)
+    angle_view_1.hide()
 
-    win3 = vis.TrajView(cont)
-    win3.hide()
+    angle_view_2 = vis.AngleView2(cont)
+    angle_view_2.hide()
+
+
+    traj_view = vis.TrajView(cont)
+    traj_view.hide()
     
-    win4 = vis.YawKappaView(cont)
-    win4.hide()
+    yaw_kappa_view = vis.YawKappaView(cont)
+    yaw_kappa_view.hide()
+
+    recorder = ExpRecorder(cont)
+    recorder.register_views(
+        traj=traj_view,
+        speed=speed_view,
+        angle_yaw=angle_view_1,
+        angle_delta=angle_view_2,
+        yaw_kappa=yaw_kappa_view
+    )
+    cont.recorder = recorder
+
     sys.exit(app.exec())
 
 

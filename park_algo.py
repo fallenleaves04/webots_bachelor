@@ -57,22 +57,21 @@ class C:
     MAX_WHEEL_ANGLE = 0.5  # rad
     CAR_WIDTH = 1.95
     CAR_LENGTH = 4.85
-    MAX_SPEED = 4.0
+    MAX_SPEED = 5.0
     MAX_RADIUS = WHEELBASE/np.tan(MAX_WHEEL_ANGLE) # tg(delta) = L/R 
     MAX_CURVATURE = 1/MAX_RADIUS
     # parametry dla A*
-    c_val = 1.5
-    FORWARD_COST = c_val*1.2
+    c_val = 1.0
+    # c_val = 1.0
+    FORWARD_COST = c_val*1.4
     BACKWARD_COST = c_val*1.2
-    GEAR_CHANGE_COST = c_val*3.0
-    STEER_CHANGE_COST = c_val*2.5
+    GEAR_CHANGE_COST = c_val*2.5
+    STEER_CHANGE_COST = c_val*1.7
     STEER_ANGLE_COST = c_val*2.0
-    OBS_COST = c_val*5.0
-    H_COST = 1.0
     # parametry dla próbkowania
-    XY_RESOLUTION = 0.1 # m
-    YAW_RESOLUTION = np.deg2rad(5)
-    INTERP_STEP_SIZE = 0.005
+    XY_RESOLUTION = 0.1 # m; zrobiono większą
+    YAW_RESOLUTION = np.deg2rad(5) # zrobiono większą
+    INTERP_STEP_SIZE = 0.001
     # parametry dla Stanley
     K_STANLEY = 0.5
 
@@ -118,7 +117,7 @@ class OccupancyGrid:
                                              0.5*self.car_width) + 1.0
 
         self.size = (100,50)
-        self.xy_resolution = C.XY_RESOLUTION
+        self.xy_resolution = 0.1
         self.grid_width = int(round(self.size[0] / self.xy_resolution))
         self.grid_height =  int(round(self.size[1] / self.xy_resolution))
         self.grid = np.zeros((self.grid_width, self.grid_height), dtype=np.float32) # indeksy w zasadzie
@@ -155,10 +154,13 @@ class OccupancyGrid:
         self.ox = None
         self.oy = None
 
-        self.parking_mode = "SEARCH"     # SEARCH | LOCKED | PARKING
-        self.locked_slot = None
-        self.stable_counter = 0
-        self.N_STABLE = 5
+        # dla sprawdzenia kolizji 
+
+        self.collision_cache = {}
+        self.collision_cache_hits = 0
+        self.collision_cache_misses = 0
+        
+        
 
 
     def setup_sensors(self,front_sensor_poses:dict,rear_sensor_poses:dict,ultrasonic_sensors:list,ultrasonic_sensors_apertures:dict,max_min_dict:dict):
@@ -206,7 +208,7 @@ class OccupancyGrid:
         if not self.controller.sensors_set:
             self.controller.sensorStats.emit(self.params,self.sensor_poses)
 
-    # ta funkcja musi znaleźć indeks celi w układzie siatki, czyli tak na prawdę to ona 
+    # ta funkcja musi znaleźć indeks celi w układzie siatki
     def make_cell(self,state) -> tuple:
         x,y = state
         i = int(np.floor((x - self.x_min) / self.xy_resolution))
@@ -290,8 +292,8 @@ class OccupancyGrid:
         box_center_x = x + box_center_offset * np.cos(yaw)
         box_center_y = y + box_center_offset * np.sin(yaw)
         
-        car_len = self.front_bumper_to_axle + self.rear_bumper_to_axle
-        car_wid = self.car_width
+        car_len = self.front_bumper_to_axle + self.rear_bumper_to_axle + 0.15
+        car_wid = self.car_width + 0.15
         
         rect = self.get_rect_corners((box_center_x, box_center_y), car_len, car_wid, yaw)
         search_radius = self.collision_radius + self.max_obs_radius
@@ -315,6 +317,44 @@ class OccupancyGrid:
 
         return False  
     
+    # dalej inna wersja sprawdzania kolizji 
+
+    def discretize_pose_for_cache(self, x, y, yaw, resolution=0.2, yaw_res=0.1):
+        # grubsza rozdzielczość dla sprawdzania kolizji
+        x_disc = int(round(x / resolution))
+        y_disc = int(round(y / resolution))
+        yaw_disc = int(round(yaw / yaw_res))
+        return (x_disc, y_disc, yaw_disc)
+    
+    def is_collision_cached(self, x, y, yaw):
+        # szybsza wersja is_collision z cache'owaniem.
+    
+        cache_key = self.discretize_pose_for_cache(x, y, yaw)
+        
+        if cache_key in self.collision_cache:
+            self.collision_cache_hits += 1
+            return self.collision_cache[cache_key]
+        
+        self.collision_cache_misses += 1
+        
+        # Oblicz (twoja oryginalna logika)
+        result = self.is_collision(x, y, yaw)
+        
+        # Zapisz w cache (ogranicz rozmiar do 10000 wpisów)
+        if len(self.collision_cache) < 10000:
+            self.collision_cache[cache_key] = result
+        
+        return result
+    
+    def clear_collision_cache(self):
+        # czyszczenie cache'u 
+        self.collision_cache.clear()
+        print(f"[Cache] Wyczyszczono. Hits: {self.collision_cache_hits}, "
+              f"Misses: {self.collision_cache_misses}, "
+              f"Hit rate: {self.collision_cache_hits/(self.collision_cache_hits+self.collision_cache_misses+1e-9)*100:.1f}%")
+        self.collision_cache_hits = 0
+        self.collision_cache_misses = 0
+
     def sensor_in_wrld(self,car_pose,sensor_pose):
         x_c,y_c,yaw_c = car_pose
         x_s, y_s, yaw_s = sensor_pose
@@ -490,11 +530,11 @@ class OccupancyGrid:
         
         if spot_type == 'parallel':
             required_len = 5.8
-            min_spot_depth = 2.1
+            min_spot_depth = 2.0
             orientation_offset = 0.0
         else: # perpendicular
             required_len = 2.7
-            min_spot_depth = 5.3
+            min_spot_depth = 5.0
             orientation_offset = np.pi/2 if side == 'right' else -np.pi/2
 
         side_threshold = 0.25  
@@ -553,8 +593,10 @@ class OccupancyGrid:
             # w tej chwili głębokość jest równa najdalszemu samochodowi
             # jak udało się znaleźć taką przeszkodę, to możemy na podstawie tego odsunąć miesce parkingowe docelowe od niej
             # wyznaczamy linię referencyjną wzdłuż samochodu jako krawędź najbliższego samochodu (jeśli po prawej np. jest (-3.0) i (-3.5), to się wybierze -3.0, tak samo po lewej)
-            ref_line_y =  min(abs(obs1['max_y']),abs(obs2['max_y'])) if side == "right" else \
-                            min(abs(obs1['min_y']),abs(obs2['min_y'])) 
+            # ref_line_y =  min(abs(obs1['max_y']),abs(obs2['max_y'])) if side == "right" else \
+            #                 min(abs(obs1['min_y']),abs(obs2['min_y'])) 
+            ref_line_y =  (abs(obs1['max_y'])+abs(obs2['max_y']))/2 if side == "right" else \
+                            (abs(obs1['min_y'])+abs(obs2['min_y']))/2
             prev_depth =  max(abs(obs1['max_y']),abs(obs2['max_y'])) if side == "right" else \
                             max(abs(obs1['min_y']),abs(obs2['min_y']))
             current_depth = prev_depth 
@@ -749,7 +791,7 @@ class Path:
 
         self.active_segment = 0
         self.segment_hold = True
-        self.changed = False
+        self.change_segment = False
 
         self.ind_la = 0
         start = 0
@@ -768,7 +810,7 @@ class Path:
     def reset_runtime_state(self):
         self.active_segment = 0
         self.segment_hold = True
-        self.changed = False
+        self.change_segment = False
         self.last_ind = 0
     # po to żeby śledzić odcinki długości   
     def _build_len_s(self):
@@ -794,7 +836,7 @@ class Path:
 
         return theta_e, er, k, yaw, ind
 
-    def nearest_index(self, xx, yy, window=10):
+    def nearest_index(self, xx, yy, window=50):
         start = self.last_ind
         end = min(start + window, len(self.xs))
         dx = np.array(self.xs[start:end]) - xx
@@ -808,28 +850,27 @@ class Path:
         dx = self.xs[seg_end_idx] - x
         dy = self.ys[seg_end_idx] - y
 
-        yaw_end = self.yaws[seg_end_idx]
+        yaw_end = abs(self.yaws[seg_end_idx])
         e_long = dx * np.cos(yaw_end) + dy * np.sin(yaw_end)
         
         return e_long
 
-    def speed_control(self,target_v,v_meas,dist_to_end,e_long,delta,dt,a_max = 4.0,a_dec = 4.0,a_lat_max = 1.7,kp_long = 10.0, e_long_thresh = 0.2):
+    def speed_control(self,target_v,v_meas,dist_to_end,e_long,delta,dt,a_max = 5.0,a_dec = 5.0,a_lat_max = 2.5,kp_long = 5.8, e_long_thresh = 0.01):
         
         v_stop = np.sqrt(2 * a_dec * max(dist_to_end,0.0))
         v_ref = min(abs(target_v), v_stop)
         v_ref *= np.sign(target_v)
         kappa = np.tan(delta)/C.WHEELBASE
-        if dist_to_end <= e_long_thresh and e_long < 0:
-            # e_long < 0 znaczy, że przejechał za daleko
-            # Chcemy dodać ujemną składową do prędkości do przodu (lub dodatnią do tyłu)
-            correction = kp_long * e_long  # to będzie ujemne
-            v_ref += correction
-            
-        
+
+        if dist_to_end <= e_long_thresh:
+            v_ref += kp_long *dist_to_end * np.sign(target_v)
+
         v_ref = np.clip(v_ref, -C.MAX_SPEED, C.MAX_SPEED)
         kappa = np.tan(delta) / C.WHEELBASE
-        v_curve = np.sqrt(a_lat_max / max(abs(kappa), 1e-3))
-        v_ref = min(abs(v_ref), v_curve) * np.sign(v_ref)
+        if abs(kappa) > 1e-6:
+            v_curve = np.sqrt(a_lat_max / abs(kappa))
+            v_ref = min(abs(v_ref), v_curve) * np.sign(v_ref)
+
         v_cmd = np.clip(
             v_ref,
             self.v_cmd_prev - a_dec * dt,
@@ -841,7 +882,7 @@ class Path:
         return v_cmd
     
     def rear_wheel_feedback_control(self,x,y,v,yaw): 
-        self.changed = False
+        self.change_segment = False
         theta_e, er, k, yaw, ind = self.calc_theta_e_and_er(x,y,yaw)
         
         seg_start, seg_end = self.get_segment_bounds()
@@ -865,21 +906,25 @@ class Path:
             delta = math.atan(C.WHEELBASE * omega / v)
             if v < 0:
                 delta = -delta
-        return delta, ind,self.changed
+        return delta, ind,self.change_segment
 
     def get_segment_bounds(self):
+        return self.segments[self.active_segment]
+    
+    def get_next_segment_bounds(self):
+        if self.active_segment < len(self.segments) - 1:
+            return self.segments[self.active_segment + 1]
         return self.segments[self.active_segment]
     
     def advance_segment(self):
         if self.active_segment < len(self.segments) - 1:
             self.active_segment += 1
-            self.segment_hold = True
             return True
         return False
     
 
     def pure_pursuit(self, x, y, yaw, v, ld=0.5):
-        self.changed = False
+        # self.change_segment = False
         ind_nearest = self.nearest_index(x, y)
         seg_start, seg_end = self.get_segment_bounds()
         ind_nearest = np.clip(ind_nearest, seg_start, seg_end)
@@ -894,14 +939,7 @@ class Path:
             if self.s[i] >= s_target:
                 self.ind_la = i
                 break
-        
-        # if (seg_end - ind_nearest) <= 2:
-        #     self.ind_la = seg_end
-        #     if self.segment_hold:
-        #         self.segment_hold = False
-        #         self.changed = self.advance_segment()
 
-        
         tx = self.xs[self.ind_la]
         ty = self.ys[self.ind_la]
 
@@ -917,7 +955,7 @@ class Path:
         # if self.segment_transition:
         #     return 0.0,ind_nearest
         
-        return delta, self.ind_la, self.changed
+        return -delta, self.ind_la # , self.change_segment
     
 
 def savitzky_golay_filt(x, window=11, poly=3):
@@ -966,9 +1004,9 @@ def resample_and_smooth_path(path:Path, ds=C.INTERP_STEP_SIZE):
         x_dense = np.interp(s_dense, s_local, x_seg)
         y_dense = np.interp(s_dense, s_local, y_seg)
 
-        x_dense = savitzky_golay_filt(x_dense, window=11, poly=3)
-        y_dense = savitzky_golay_filt(y_dense, window=11, poly=3)
-        
+        #x_dense = savitzky_golay_filt(x_dense, window=21, poly=7)
+        #y_dense = savitzky_golay_filt(y_dense, window=21, poly=7)
+        #
         # kierunek stały w segmencie
         dir_val = int(np.sign(d_seg[0])) if np.sign(d_seg[0]) != 0 else 1
         dir_dense = np.full_like(x_dense, dir_val, dtype=int)
@@ -976,7 +1014,7 @@ def resample_and_smooth_path(path:Path, ds=C.INTERP_STEP_SIZE):
         seglen_dense = np.full_like(x_dense, dir_val * s_end, dtype=float)
 
         kappa_dense = np.interp(s_dense, s_local, path.curvs[i0:i1+1])
-        kappa_dense = savitzky_golay_filt(kappa_dense, window=21, poly=3)
+        #wkappa_dense = savitzky_golay_filt(kappa_dense, window=21, poly=3)
 
         if seg_i > 0:
             # usuń pierwszy punkt żeby nie dublować granicy
@@ -1000,6 +1038,11 @@ def resample_and_smooth_path(path:Path, ds=C.INTERP_STEP_SIZE):
     dx = np.gradient(x_all, ds)
     dy = np.gradient(y_all, ds)
     yaw = np.unwrap(np.arctan2(dy, dx))
+    yaw_corrected = yaw.copy()
+    for i in range(len(yaw_corrected)):
+        if dir_all[i] < 0:
+            yaw_corrected[i] = mod2pi(yaw_corrected[i] + np.pi)
+    yaw = yaw_corrected
     
     new_path = Path(
         xs=list(x_all),
@@ -1010,6 +1053,7 @@ def resample_and_smooth_path(path:Path, ds=C.INTERP_STEP_SIZE):
         costs=path.costs
     )
     return new_path
+
 
 class Node:
     def __init__(self, cell: tuple, state: tuple, delta, direction: str, g_cost, h_cost, parent=None):
@@ -1053,12 +1097,12 @@ class NewPlanner(QtCore.QObject):
     hmapData = QtCore.pyqtSignal(object)
     def __init__(self,controller):
         super().__init__()
-        self.goal_tolerance = 0.5
-        self.xy_resolution = C.XY_RESOLUTION
-        self.yaw_resolution = C.YAW_RESOLUTION  
+        self.goal_tolerance = 0.1
+        self.xy_resolution = 0.1 #C.XY_RESOLUTION
+        self.yaw_resolution = np.deg2rad(5) #C.YAW_RESOLUTION  
         self.expansion_counter = 0.0
-        self.step_size = 0.5
-        self.n_steers = 5
+        self.step_size = 0.5 # 0.5
+        self.n_steers = 3
         self.actions = self.calc_actions()
         self.hmap = None
         self.dist_map = None
@@ -1195,8 +1239,22 @@ class NewPlanner(QtCore.QObject):
                 else:
                     h_a_star = dist
         
-        return max(h_a_star,h_rs) 
+        # return max(h_rs, h_a_star)
+        return max(h_rs, h_a_star)
+       
+
+    def close_to_goal(self, pose, goal_pose, tolerance_factor=0.5):
+        # akceptuj kiedy jest blisko, a RS dopnie dalej
+        dx = pose[0] - goal_pose[0]
+        dy = pose[1] - goal_pose[1]
+        d = np.hypot(dx, dy)
+        dyaw = abs(mod2pi(pose[2] - goal_pose[2]))
+        # Używaj większej tolerancji niż oryginalna
+        relaxed_pos_tol = self.goal_tolerance * tolerance_factor
+        relaxed_yaw_tol = self.yaw_resolution * tolerance_factor
         
+        return (d <= relaxed_pos_tol) and (dyaw <= relaxed_yaw_tol)
+       
     def simulate_motion(self, state, delta, direction):
         x, y, theta = state
         d = 1.0 if direction == "forward" else -1.0
@@ -1206,17 +1264,16 @@ class NewPlanner(QtCore.QObject):
         y_new = y + d * self.step_size * np.sin(theta)
         return (x_new, y_new, theta_new)
     
-    def get_neighbours(self, node:Node, grid:OccupancyGrid):
+    def get_neighbours(self, node:Node, goal_pose:tuple, grid:OccupancyGrid):
         neighbours = []
         
-        actions = self.actions
-        for delta,direction in actions:
+        for delta,direction in self.actions:
             next_state = self.simulate_motion(
                 node.state,
                 delta,
                 direction 
             )
-            if grid.is_collision(*next_state):
+            if grid.is_collision_cached(*next_state):
                 continue
 
             cost = self.motion_cost(node, next_state, delta, direction)
@@ -1230,7 +1287,7 @@ class NewPlanner(QtCore.QObject):
                 parent=node
             )
             neighbours.append(neighbour)
-        
+    
         return neighbours   
     
     def motion_cost(self, node:Node, to_state, delta, direction):
@@ -1247,11 +1304,11 @@ class NewPlanner(QtCore.QObject):
         return cost
 
     def try_reeds_shepp(self,node:Node,goal_pose,grid:OccupancyGrid):
-        rs_path = reeds_shepp.path_sample(node.state,goal_pose,C.MAX_RADIUS,self.xy_resolution)
+        rs_path = reeds_shepp.path_sample(node.state,goal_pose,C.MAX_RADIUS,C.XY_RESOLUTION)
         
         if not rs_path:
             return None,None
-        for i in range(0,len(rs_path),1): 
+        for i in range(0,len(rs_path),2): 
             (rs_xs,rs_ys,rs_yaws,rs_curvs,rs_segment_lengths) = rs_path[i]
             if grid.is_collision(rs_xs,rs_ys,rs_yaws):
                 return None,None
@@ -1302,7 +1359,7 @@ class NewPlanner(QtCore.QObject):
             rs_iter = rs_path[1:]
         else:
             rs_iter = rs_path
-
+        #rs_iter = rs_path
         for pt in rs_iter:
             path_xs.append(pt[0])
             path_ys.append(pt[1])
@@ -1314,20 +1371,18 @@ class NewPlanner(QtCore.QObject):
         return Path(path_xs, path_ys, path_yaws, dirs, curvs,costs)
     
     def should_try_rs(self, node, goal):
-        # d = np.hypot(node.state[0]-goal[0], node.state[1]-goal[1])
-        # if d < 5.0:   return (self.expansion_counter % 5) == 0
-        # if d < 15.0:  return (self.expansion_counter % 10) == 0
-        return (self.expansion_counter % 20) == 0
-    def is_goal(self, pose, goal_pose):
-        dx = pose[0] - goal_pose[0]
-        dy = pose[1] - goal_pose[1]
-        d = np.hypot(dx, dy)
-        dyaw = abs(mod2pi(pose[2] - goal_pose[2]))
-        return (d <= self.goal_tolerance) and (dyaw <= self.yaw_resolution)
+        d = np.hypot(node.state[0]-goal[0], node.state[1]-goal[1])
+        if d < 5.0:   return (self.expansion_counter % 10) == 0
+        if d < 15.0:  return (self.expansion_counter % 20) == 0
+        return (self.expansion_counter % 30) == 0
+    
     def hybrid_a_star_planning(self,start_pose,goal_pose,grid:OccupancyGrid):
         print("[Planner] Zaczęto planowanie")
-        open_set = PriorityQueue()
-        closed_set = {}
+
+        grid.clear_collision_cache() # czyść cache kolizji
+
+        open_set = PriorityQueue() # otwarty zbiór kolejka priorytetowa
+        closed_set = {} # zamknięty C[state] = g_cost
 
         self.hmap = self.calculate_unconstrained_heuristic(start_pose,goal_pose,grid)
         #self.hmapData.emit(self.hmap)
@@ -1355,35 +1410,52 @@ class NewPlanner(QtCore.QObject):
                     continue # już byliśmy tu
             closed_set[current_cell] = current_node.g_cost
 
+            #blisko celu - dopnij RS też
+            if self.close_to_goal(current_node.state,goal_pose):
+                rs_path,goal_node = self.try_reeds_shepp(current_node,goal_pose,grid)
+                if rs_path is not None and goal_node is not None:
+                    print(f"[Planner] Znaleziono ścieżkę! Ekspansji: {self.expansion_counter}")
+                    return self.reconstruct_path(rs_path, goal_node)
+                
             if self.should_try_rs(current_node,goal_pose):
                 rs_path, possible_goal_node = self.try_reeds_shepp(current_node, goal_pose, grid)
                 if rs_path is not None and possible_goal_node is not None:
-                    print(f"[Planner] Znaleziono optymalną trasę! Koszt: {possible_goal_node.g_cost:.2f}")
+                    print(f"[Planner] Znaleziono ścieżkę z Reeds-Shepp! Ekspansji: {self.expansion_counter}")
                     return self.reconstruct_path(rs_path, possible_goal_node)
          
-            neighbours = self.get_neighbours(current_node,grid)
+            neighbours = self.get_neighbours(current_node,goal_pose,grid)
             
             for neighbour in neighbours:
                 neighbour_cell = neighbour.cell
-                same_cell = (neighbour_cell == current_cell)
-                if (neighbour_cell in closed_set) and (closed_set[neighbour_cell] <= neighbour.g_cost) and (not same_cell):
-                    continue
-                existing = open_set.get_node(neighbour_cell) if open_set.contains(neighbour_cell) else None
-                better_path = (existing is None) or (neighbour.g_cost < existing.g_cost - 1e-6) or same_cell
+                same_cell = (neighbour_cell == current_cell) # trafił do tej samej komórki czy nie
+                
+                if (neighbour_cell in closed_set) and (closed_set[neighbour_cell] <= neighbour.g_cost) and (not same_cell): 
+                    continue # jeśli już komórka jest w zamkniętym i razem z tym jej koszt jest mniejszy niż tego sąsiada i jeszcze dodatkowo sąsiad jest w bieżącej komórce
+                existing = open_set.get_node(neighbour_cell)
+                better_path = (existing is None) or (neighbour.g_cost > existing.g_cost - 1e-3) or same_cell
                 if not better_path:
-                    continue
+                    continue # lepsza ścieżka - nie ma w otwartym zbiorze nowego takiego sąsiada, albo koszt sąsiada jest mniejszy od już istniejąćego
                 neighbour.h_cost = self.calculate_hybrid_heuristic(neighbour.state,goal_pose)
                 neighbour.f_cost = neighbour.g_cost + neighbour.h_cost
                 if same_cell:
-                    if neighbour.f_cost > current_node.f_cost + 1e-2: # tie breaker
+                    if neighbour.f_cost > current_node.f_cost + 1e-5: # tie breaker
                         continue
                     neighbour.parent = current_node.parent
                 open_set.push(neighbour)
                 
-            
-            #self.expansionData.emit(current_node.state)
-            print(f"[Planner] h_cost:{current_node.h_cost}, g_cost:{current_node.g_cost}, f_cost:{current_node.f_cost}")
-            
+            if self.expansion_counter % 20 == 0:
+                self.expansionData.emit(current_node.state)
+            #if self.expansion_counter % 50 == 0:
+                
+            dist_to_goal = np.hypot(current_node.state[0] - goal_pose[0], 
+                                    current_node.state[1] - goal_pose[1])
+            print(f"[Planner] Ekspansji: {self.expansion_counter}, "
+                    f"dist: {dist_to_goal:.1f}m, "
+                    f"f: {current_node.f_cost:.1f}, "
+                    f"g: {current_node.g_cost:.1f}, "
+                    f"h: {current_node.h_cost:.1f}")
+        
+
         return None
                
 class PlanningWorker(QtCore.QObject):
