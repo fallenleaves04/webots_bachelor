@@ -17,6 +17,8 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/Floor.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/street_furniture/protos/UrbanFence.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/mercedes_benz/MercedesBenzSprinterSimple.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/street_furniture/protos/TrashBin.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/street_furniture/protos/ClothRecyclingContainer.proto"
 
 WorldInfo {
   info [
@@ -50,8 +52,8 @@ WorldInfo {
 }
 Viewpoint {
   fieldOfView 1.57
-  orientation 0.4238609978390775 0.19776128726526834 -0.8838734795037385 2.208458823518109
-  position 89.58947429323791 43.21992473961654 5.603097380137408
+  orientation 0.43604913155744407 0.21851715031815455 -0.8729899254200084 2.1802633280028982
+  position 75.37717272124858 38.90097388576205 8.16608187234607
   near 0.35
   follow "SAMOCHOD_TESTOWY"
   followType "Mounted Shot"
@@ -1002,12 +1004,11 @@ Road {
   splineSubdivision 0
 }
 FifaSoccerBall {
-  hidden linearVelocity_0 0 0 -1847.5369200007508
-  translation -241469997528.69 327951144796.27893 498185123604.3268
+  translation -241469997528.69 327951144796.27893 498183513447.9875
   rotation 0.7914649081469312 0.1908917062017939 -0.5806407285708934 -2.7921153862066475
 }
 MercedesBenzSprinterSimple {
-  translation 76.034 45.4847 0.38
+  translation 76.219 45.8051 0.38
   rotation 0 0 -1 2.0944
   name "Mercedes-Benz Sprinter(1)"
 }
@@ -1022,6 +1023,9 @@ Pose {
   translation 82.1343 -42.7229 -0.017
   rotation 0 0 1 2.3562
   children [
+    TrashBin {
+      translation 33.31 2.67 0
+    }
     LincolnMKZSimple {
       translation 42.4408 4.07249 0.34
       rotation 0 0 1 -1.5707853071795865
@@ -1033,19 +1037,9 @@ Pose {
       name "vehicle(38)"
     }
     ToyotaPriusSimple {
-      translation 39.7684 4.17079 0.27
-      rotation 0 0 -1 1.57079
-      name "vehicle(21)"
-    }
-    ToyotaPriusSimple {
       translation 19.2584 3.87066 0.28
       rotation 0 0 -1 1.57079
       name "vehicle(37)"
-    }
-    TeslaModel3Simple {
-      translation 34.7341 3.78342 0.31
-      rotation 0 0 1 -1.5707953071795862
-      name "vehicle(22)"
     }
     TeslaModel3Simple {
       translation 21.8541 3.78342 0.29
@@ -1058,11 +1052,6 @@ Pose {
       name "vehicle(39)"
     }
     CitroenCZeroSimple {
-      translation 24.34 3.8 0.25
-      rotation 0 0 1 -1.5707953071795862
-      name "vehicle(32)"
-    }
-    CitroenCZeroSimple {
       translation 27.17 3.8 0.24
       rotation 0 0 -1 1.5708
       name "vehicle(1)"
@@ -1071,7 +1060,7 @@ Pose {
       translation 25.66 2.6 0
       children [
         BmwX5Simple {
-          translation 6.405 1.2491 0.32
+          translation 3.925 1.2491 0.32
           rotation -2.27108e-07 -5.70071e-07 -1 1.5708
           name "vehicle(23)"
         }
@@ -1109,13 +1098,13 @@ BmwX5Simple {
   name "vehicle(16)"
 }
 ToyotaPriusSimple {
-  translation 66.8029 30.0357 0.25
-  rotation 0 0 1 -2.2252896938995748
+  translation 67.097 29.9794 0.25
+  rotation 0 0 -1 2.13
   name "vehicle(18)"
 }
 TeslaModel3Simple {
-  translation 72.5402 39.2805 0.3
-  rotation 0 0 1 -2.0943903061004256
+  translation 72.7915 39.1355 0.3
+  rotation 5.5367e-09 -9.58979e-09 1 -2.0943853071795866
   name "vehicle(19)"
 }
 SimpleTree {
@@ -1431,28 +1420,18 @@ DEF parking Pose {
   ]
 }
 BmwX5 {
-  hidden position_0_0 -0.0005210083324931508
-  hidden position2_0_0 182.04282942812515
-  hidden position_0_1 -0.0005545472943847896
-  hidden position2_0_1 182.28596356450313
-  hidden position_0_2 177.33488635639623
-  hidden position_0_3 178.06339796911405
-  hidden linearVelocity_0 -4.6836910741824766e-07 -5.187150269336159e-07 2.9964440892945275e-07
-  hidden angularVelocity_0 3.7949718093934e-08 -9.764420562940317e-08 -4.671071867433036e-10
-  hidden rotation_1 0.00026050293919289654 -0.9999952670758271 -0.0030656099170921504 6.113640028490687
-  hidden linearVelocity_1 -3.622454995526186e-08 -1.2696438619222387e-09 1.2691503723598208e-07
-  hidden angularVelocity_1 3.525003891243468e-08 -1.0096515058107915e-07 -4.4870290513446573e-10
-  hidden rotation_2 0.0002772657784058981 -0.999971595238002 -0.007532054225337243 6.209593562414682
-  hidden linearVelocity_2 -2.859258403345546e-08 -1.1235127712080975e-08 2.1260105652325683e-07
-  hidden angularVelocity_2 3.448292402197243e-08 -1.0181118123613188e-07 -4.4378029913580547e-10
-  hidden rotation_3 0 -1 0 1.4056977553678043
-  hidden linearVelocity_3 -9.328055385814206e-08 -7.5822110157843e-08 2.4403021114273645e-07
-  hidden angularVelocity_3 2.013343290110274e-07 -2.509973884601388e-07 -4.886021373729836e-10
-  hidden rotation_4 0 1 0 2.134209368085628
-  hidden linearVelocity_4 -9.329809638967154e-08 -7.488840278261067e-08 1.5525902811576296e-07
-  hidden angularVelocity_4 2.0001054180219235e-07 -2.497153881330422e-07 -4.887250205190537e-10
-  translation 90.09061157461093 42.16796829551543 0.29837234984329347
-  rotation 0.002192468646246256 0.0009894645010059982 0.9999971070164336 -2.2941300931103825
+  hidden position_0_0 -1.0636253403140099e-11
+  hidden position2_0_0 218.63932457575612
+  hidden position_0_1 3.244574013069705e-11
+  hidden position2_0_1 218.89711199509253
+  hidden position_0_2 216.00004814802764
+  hidden position_0_3 216.90468861345144
+  hidden rotation_1 5.3181267015700496e-12 -1 -7.201553275337509e-12 5.01102413165018
+  hidden rotation_2 1.6222870065348524e-11 1 2.919508830191791e-11 5.268811550986591
+  hidden rotation_3 0 -0.9999999999999999 0 2.3717477039217045
+  hidden rotation_4 0 1 0 3.2763881693455006
+  translation 72.4745 32.7998 0.558374
+  rotation 0.0021924845887820944 0.0011998719394070991 0.9999968766544509 -2.140107939639231
   color 0.654902 0.654902 0.654902
   name "SAMOCHOD_TESTOWY"
   controller "parking_parallel_new"
@@ -1704,7 +1683,7 @@ BmwX5 {
           appearance PBRAppearance {
             baseColorMap ImageTexture {
               url [
-                "D:\\User Files\\BACHELOR DIPLOMA\\Pliki symulacyjne\\controllers\\parking_parallel_new\\checkerboards\\apriltag2.png"
+                "../controllers/parking_parallel_new/checkerboards/apriltag2.png"
               ]
             }
             transparency 1
@@ -1718,6 +1697,7 @@ BmwX5 {
           size 3 3
           appearance PBRAppearance {
             transparency 1
+            roughness 1
             metalness 0
           }
         }
@@ -1928,4 +1908,8 @@ BmwX5 {
   innerWindowTransparency 0.4
   innerWindowDust TRUE
   window "automobile_window"
+}
+ClothRecyclingContainer {
+  translation 53.4821 -17.0024 0
+  rotation 0 0 1 2.0944
 }

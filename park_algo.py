@@ -65,7 +65,7 @@ class C:
     # c_val = 1.0
     FORWARD_COST = c_val*1.4
     BACKWARD_COST = c_val*1.2
-    GEAR_CHANGE_COST = c_val*2.5
+    GEAR_CHANGE_COST = c_val*3.5
     STEER_CHANGE_COST = c_val*1.7
     STEER_ANGLE_COST = c_val*2.0
     # parametry dla próbkowania
@@ -1102,7 +1102,7 @@ class NewPlanner(QtCore.QObject):
         self.yaw_resolution = np.deg2rad(5) #C.YAW_RESOLUTION  
         self.expansion_counter = 0.0
         self.step_size = 0.5 # 0.5
-        self.n_steers = 3
+        self.n_steers = 5
         self.actions = self.calc_actions()
         self.hmap = None
         self.dist_map = None
@@ -1443,8 +1443,8 @@ class NewPlanner(QtCore.QObject):
                     neighbour.parent = current_node.parent
                 open_set.push(neighbour)
                 
-            if self.expansion_counter % 20 == 0:
-                self.expansionData.emit(current_node.state)
+            #if self.expansion_counter % 20 == 0:
+                #self.expansionData.emit(current_node.state)
             #if self.expansion_counter % 50 == 0:
                 
             dist_to_goal = np.hypot(current_node.state[0] - goal_pose[0], 

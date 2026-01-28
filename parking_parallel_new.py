@@ -101,7 +101,7 @@ def set_speed(kmh,driver):
     global speed
     speed = min(kmh, MAX_SPEED)
     driver.setCruisingSpeed(speed)
-    #print(f"Ustawiono prędkość {speed} km/h")
+    print(f"Ustawiono prędkość {speed} km/h")
 
 def set_steering_angle(wheel_angle,driver):
     global steering_angle,manual_steering
@@ -1246,8 +1246,8 @@ class MainWorker(vis.QtCore.QObject):
                                         ogm.yolo_x_pts.append(pt_global[0])
                                         ogm.yolo_y_pts.append(pt_global[1])
                                     
-                                cv2.namedWindow(f"yolo {name}", cv2.WINDOW_NORMAL)
-                                cv2.imshow(f"yolo {name}", cv2.cvtColor(image,cv2.COLOR_BGR2RGB))
+                                #cv2.namedWindow(f"yolo {name}", cv2.WINDOW_NORMAL)
+                                #cv2.imshow(f"yolo {name}", cv2.cvtColor(image,cv2.COLOR_BGR2RGB))
                         
                         spots = []
                         if len(ox) > 0:
@@ -1257,8 +1257,8 @@ class MainWorker(vis.QtCore.QObject):
                             ogm.setup_obstacles(cls)
                             #plot_kdtree_query_debug(ogm.obstacles,ogm.kd_tree,(x_odo,y_odo,yaw_odo),C.CAR_LENGTH,C.CAR_WIDTH,ogm.collision_radius + ogm.max_obs_radius)
                             ogm.match_semantics_with_sat()
-                            #spots = ogm.find_spots_scanning((x_odo,y_odo,yaw_odo), find_type, side)
-                            #spots.extend(ogm.find_spots_scanning((x_odo,y_odo,yaw_odo), "perpendicular", "left"))
+                            spots = ogm.find_spots_scanning((x_odo,y_odo,yaw_odo), find_type, side)
+                            #spots.extend(ogm.find_spots_scanning((x_odo,y_odo,yaw_odo), "parallel", "left"))
                             ogm.spots = spots
                         else:
                             ox,oy,cls,spots = [],[],[],[]

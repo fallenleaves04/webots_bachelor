@@ -51,7 +51,7 @@ class SpeedView(pg.GraphicsLayoutWidget):
         self.view_speed.setDownsampling(mode='peak')
 
         cont.speedUpdated.connect(self.update_speed)
-        cont.parkingToggled.connect(self.on_parking_change)
+        #cont.parkingToggled.connect(self.on_parking_change)
         cont.clearDataPlots.connect(self.clear_plots)
 
     @QtCore.pyqtSlot()
@@ -116,7 +116,7 @@ class AngleView1(pg.GraphicsLayoutWidget):
         self.view_angle.setDownsampling(mode='peak')
 
         cont.angleUpdated.connect(self.update_angle)
-        cont.parkingToggled.connect(self.on_parking_change)
+        #cont.parkingToggled.connect(self.on_parking_change)
         cont.clearDataPlots.connect(self.clear_plots)
 
     @QtCore.pyqtSlot()
@@ -176,7 +176,7 @@ class AngleView2(pg.GraphicsLayoutWidget):
         self.view_angle.setDownsampling(mode='peak')
 
         cont.angleUpdated.connect(self.update_angle)
-        cont.parkingToggled.connect(self.on_parking_change)
+        #cont.parkingToggled.connect(self.on_parking_change)
         cont.clearDataPlots.connect(self.clear_plots)
 
     @QtCore.pyqtSlot()
@@ -244,7 +244,7 @@ class YawKappaView(pg.GraphicsLayoutWidget):
         
         cont.funcCarUpdated.connect(self.update_data)
         cont.pathUpdated.connect(self.set_path)
-        cont.parkingToggled.connect(self.on_parking_change)
+        #cont.parkingToggled.connect(self.on_parking_change)
 
 
     def btns_layout(self):
@@ -350,7 +350,7 @@ class TrajView(pg.GraphicsLayoutWidget):
         self.traj_curve1 = self.view_trajectory.plot([], [], pen='r', name="Odometria")
         self.traj_curve2 = self.view_trajectory.plot([], [], pen='b', name="Webots")
         self.traj_curve3 = self.view_trajectory.plot([], [], pen=None, symbol='s',symbolSize=4,symbolBrush='k',symbolPen=None, name="Przeszkody")
-        self.traj_curve_yolo = self.view_trajectory.plot([], [], pen=None, symbol='t',symbolSize=2,symbolBrush='k',symbolPen=None, name="YOLO")
+        #self.traj_curve_yolo = self.view_trajectory.plot([], [], pen=None, symbol='t',symbolSize=2,symbolBrush='k',symbolPen=None, name="YOLO")
         self.traj_curve4 = self.view_trajectory.plot([], [], pen=None, symbol='o',symbolSize=5,symbolBrush='k',symbolPen=None, name="Miejsca pojazdu")
         #self.traj_curve5 = self.view_trajectory.plot([], [], pen='g', name="Przykładowa ścieżka")
         self.traj_curve6 = self.view_trajectory.plot([], [], pen=pg.mkPen(color=(0, 100, 100), width=1.5), name="Ścieżka Hybrid-A*")
@@ -512,9 +512,9 @@ class TrajView(pg.GraphicsLayoutWidget):
             self.t3x = data[2][0]; self.t3y = data[2][1]
             self.traj_curve3.setData(self.t3x, self.t3y)
     
-        if not all(v is None for v in data[5]):
-            self.tx_yolo = data[5][0]; self.ty_yolo = data[5][1]
-            self.traj_curve_yolo.setData(self.tx_yolo, self.ty_yolo)
+        # if not all(v is None for v in data[5]):
+        #     self.tx_yolo = data[5][0]; self.ty_yolo = data[5][1]
+        #     self.traj_curve_yolo.setData(self.tx_yolo, self.ty_yolo)
         # zaktualizuj krzywe
         self.traj_curve1.setData(self.t1x, self.t1y)
         self.traj_curve2.setData(self.t2x, self.t2y)
@@ -691,7 +691,7 @@ class TrajView(pg.GraphicsLayoutWidget):
             self.traj_curve6.setData([], [])   
             self.traj_curve3.setData([], [])
             self.traj_curve4.setData([], [])
-            self.traj_curve_yolo.setData([], [])
+            #self.traj_curve_yolo.setData([], [])
             for left, right in self.sensor_cones.values():
                 self.view_trajectory.removeItem(left)
                 self.view_trajectory.removeItem(right)
@@ -797,7 +797,7 @@ class SensorView(pg.GraphicsLayoutWidget):
         self._create_base_side_left()
         self._create_base_side_right()
 
-        cont.parkingToggled.connect(self.on_parking_change)
+        #cont.parkingToggled.connect(self.on_parking_change)
         cont.sensorUpdated.connect(self.update_sensors)
         #cont.locUpdated.connect(self.update_location)
 

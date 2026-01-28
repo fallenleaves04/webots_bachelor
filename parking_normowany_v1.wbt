@@ -20,6 +20,9 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/traffic/protos/ParkingLines.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/mercedes_benz/MercedesBenzSprinterSimple.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/street_furniture/protos/TrashContainer.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/shapes/protos/TexturedBoxShape.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/factory/containers/protos/WoodenBox.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/obstacles/protos/OilBarrel.proto"
 
 WorldInfo {
   info [
@@ -52,9 +55,9 @@ WorldInfo {
   ]
 }
 Viewpoint {
-  fieldOfView 1.57
-  orientation -0.4796339051176135 0.1892770391958394 0.8568112507984968 2.6558748998494113
-  position 116.10196615225085 -25.166143453533703 13.84860986222169
+  fieldOfView 1.24
+  orientation -0.17164351243646594 0.05434882799282992 0.9836588379790417 2.6122720019211796
+  position 133.5254816805257 -52.17239070923965 3.5516691370847657
   near 0.35
   follow "SAMOCHOD_TESTOWY"
   followType "Mounted Shot"
@@ -1005,8 +1008,8 @@ Road {
   splineSubdivision 0
 }
 FifaSoccerBall {
-  hidden linearVelocity_0 0 0 -1246.8902399997796
-  translation -241469997528.69 327951144796.27893 498164698727.41895
+  hidden linearVelocity_0 0 0 -1743.119280000582
+  translation -241469997528.69 327951144796.27893 498118476918.60803
   rotation 0.7914649081469312 0.1908917062017939 -0.5806407285708934 -2.7921153862066475
 }
 SimpleTree {
@@ -1051,17 +1054,17 @@ Pose {
   rotation 0.00049999982000009 -0.0007999997120001439 0.9999995550002214 0.785398
   children [
     TeslaModel3Simple {
-      translation 13.74 54.86 0.36
+      translation 13.74 55.36 0.36
       rotation 0 0 1 1.5708
       name "vehicle(34)"
     }
     TeslaModel3Simple {
-      translation 2.2302 14.97 0.28
+      translation 2.2302 14.74 0.28
       rotation 0 0 -1 -5.307179586466759e-06
       name "vehicle(5)"
     }
     BmwX5Simple {
-      translation 2.03 18.75 0.36
+      translation 2.03 17.99 0.36
       name "vehicle(25)"
     }
     BmwX5Simple {
@@ -1069,7 +1072,8 @@ Pose {
       name "vehicle(3)"
     }
     BmwX5Simple {
-      translation 2.38 32.49 0.33
+      translation 2.39099 32.5996 0.33
+      rotation 0 0 1 -0.1
       name "vehicle(4)"
     }
     BmwX5Simple {
@@ -1077,22 +1081,30 @@ Pose {
       name "vehicle(35)"
     }
     BmwX5Simple {
-      translation 13.5745 33.799 0.37
-      rotation 0 0 1 1.47
+      translation 13.6269 28.0556 0.37
+      rotation 0 0 -1 -1.4699953071795866
       name "vehicle(26)"
     }
     ToyotaPriusSimple {
-      translation 13.55 22.17 0.33
+      translation 13.73 22.52 0.33
       rotation 0 0 1 1.5708
       name "vehicle(24)"
     }
     ToyotaPriusSimple {
-      translation 2.25 22.63 0.32
+      translation 1.75 23.83 0.32
       rotation 0 0 -1 -5.307179586466759e-06
       name "vehicle(29)"
     }
+    WoodenBox {
+      translation -1.42 29.75 0.3
+    }
+    OilBarrel {
+      translation 4.77 11.93 0.44
+    }
+    TexturedBoxShape {
+    }
     ToyotaPriusSimple {
-      translation 13.56 39.27 0.31
+      translation 13.72 39.16 0.31
       rotation 0 0 1 1.5708
       name "vehicle(27)"
     }
@@ -1107,16 +1119,16 @@ Pose {
       name "vehicle(1)"
     }
     TrashContainer {
-      translation 4.33065 42.9072 0
+      translation 3.54565 41.5466 0
       rotation 0 0 1 -0.523595307179586
     }
     RangeRoverSportSVRSimple {
-      translation 13.7 5.94004 0.39
+      translation 13.7 5.99004 0.39
       rotation 0 0 1 1.5708
       name "vehicle(13)"
     }
     LincolnMKZSimple {
-      translation 2.1 9.19 0.34
+      translation 2.1 9.32 0.34
       name "vehicle(11)"
     }
     LincolnMKZSimple {
@@ -1130,12 +1142,12 @@ Pose {
       name "vehicle(2)"
     }
     LincolnMKZSimple {
-      translation 13.53 12.12 0.39
+      translation 13.6 11.42 0.39
       rotation 0 0 1 1.5708
       name "vehicle(12)"
     }
     LincolnMKZSimple {
-      translation 13.7336 45.9945 0.36
+      translation 13.6761 45.9415 0.36
       rotation 0 0 1 1.62
       name "vehicle(28)"
     }
@@ -1405,17 +1417,17 @@ Pose {
           name "urban fence(58)"
         }
         TeslaModel3Simple {
-          translation 45.18 1.67 0.33
+          translation 45.48 1.67 0.33
           rotation 0 0 -1 -5.307179586466759e-06
           name "vehicle(15)"
         }
         ToyotaPriusSimple {
-          translation 34.15 1.59003 0.3
+          translation 34.23 1.59003 0.3
           rotation 0 0 -1 -5.307179586466759e-06
           name "vehicle(14)"
         }
         CitroenCZeroSimple {
-          translation 24.1 1.62 0.25
+          translation 23.62 1.62 0.25
           name "vehicle(8)"
         }
         BmwX5Simple {
@@ -1800,32 +1812,28 @@ DEF parking Pose {
   ]
 }
 BmwX5 {
-  hidden position_0_0 -2.849944617391897e-11
-  hidden position2_0_0 66.61250186640316
-  hidden position_0_1 -4.1733240946782635e-11
-  hidden position2_0_1 60.256876570645424
-  hidden position_0_2 70.37457370209574
-  hidden position_0_3 62.015083563503104
-  hidden linearVelocity_0 -0.00010003803288400131 0.00010088051354420827 0.004142045896959636
-  hidden angularVelocity_0 -0.00023570988419961952 -0.00023408279818652993 8.595587085097685e-09
-  hidden translation_1 0 0 0
-  hidden rotation_1 -2.3648268710552875e-06 0.9999999999943192 2.4018506265970757e-06 0.2771864532805072
-  hidden linearVelocity_1 -8.595715623882857e-05 8.65331693968778e-05 0.002688218525431563
-  hidden angularVelocity_1 -0.00023475901268417646 -0.00023315626934160432 8.54977313981202e-09
-  hidden translation_2 0 0 0
-  hidden rotation_2 -1.4491813417597553e-06 0.9999999999988487 -4.4980550176026603e-07 4.876717584241065
-  hidden linearVelocity_2 -8.595550125490062e-05 8.653145877490105e-05 0.0026912266557119857
-  hidden angularVelocity_2 -0.00023475494126584925 -0.00023315843001471114 8.522534799417046e-09
-  hidden translation_3 0 0 0
-  hidden rotation_3 0 -1 0 5.296854188521049
-  hidden linearVelocity_3 -8.493834358723008e-05 8.551896225739124e-05 0.003256207237948402
-  hidden angularVelocity_3 -0.00022864486704547997 -0.00022712365252062987 8.204491490466212e-09
-  hidden translation_4 0 0 0
-  hidden rotation_4 0 -1 0 4.0919243581535305
-  hidden linearVelocity_4 -8.494568146705409e-05 8.552626234076378e-05 0.0032592153678666917
-  hidden angularVelocity_4 -0.00022866422828142214 -0.00022714343301110168 8.205596794028844e-09
-  translation 113.74717063671011 -22.556795344559696 0.2787517342964669
-  rotation 0.0030349800060057172 -0.0012692284388558662 0.9999945889631269 2.347084829224509
+  hidden position_0_0 -2.7344439564085937e-11
+  hidden position2_0_0 -0.1426049137179497
+  hidden position_0_1 2.7312085395383986e-11
+  hidden position2_0_1 -0.14260491702775496
+  hidden position_0_2 -0.14605860443051283
+  hidden position_0_3 -0.14605858710517663
+  hidden linearVelocity_0 -1.6767968133990507e-12 8.643314325488291e-13 6.414120434783399e-13
+  hidden angularVelocity_0 2.844145115335909e-13 2.8878559788227113e-13 -1.368801130729438e-14
+  hidden rotation_1 -1.367221978204297e-11 1 1.9142456637979854e-10 0.14260491371794856
+  hidden linearVelocity_1 8.54849366020114e-12 8.37414215446309e-12 9.956577833635252e-13
+  hidden angularVelocity_1 1.0677311291476772e-12 -4.596209420625533e-13 -1.7394579031953147e-14
+  hidden rotation_2 -1.3656042697691991e-11 -1 -1.9119806678536736e-10 0.14260491702775455
+  hidden linearVelocity_2 -8.28082748839935e-12 -8.63438452437271e-12 9.958538176451097e-13
+  hidden angularVelocity_2 -4.654939725128591e-13 1.0682787938101456e-12 -9.10931931149785e-15
+  hidden rotation_3 0 1 0 0.14605860443051416
+  hidden linearVelocity_3 9.456250500302358e-12 8.14409319399841e-12 3.215490569588938e-14
+  hidden angularVelocity_3 2.6048281384492876e-12 1.1526673134255475e-12 -1.1326614573311409e-14
+  hidden rotation_4 0 -1 0 0.14605858710517766
+  hidden linearVelocity_4 -9.449202943035003e-12 -8.134429100086222e-12 3.208957667540266e-14
+  hidden angularVelocity_4 -2.5944981550760096e-12 -1.1390258655964538e-12 -9.192326269582558e-15
+  translation 128.67196237824155 -50.89156273507556 0.2983740338536937
+  rotation 0.0021924816666954905 -0.000901976127921499 0.9999971897276541 2.3610153060278254
   color 0.654902 0.654902 0.654902
   name "SAMOCHOD_TESTOWY"
   controller "parking_parallel_new"
@@ -2406,7 +2414,6 @@ BmwX5 {
       speedResolution 0.025
     }
   ]
-  shifter FALSE
   outerWindowTransparency 0.1
   innerWindowTransparency 0.4
   innerWindowDust TRUE
