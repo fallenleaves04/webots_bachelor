@@ -10,6 +10,7 @@ from pyqtgraph import QtCore
 from sklearn.decomposition import PCA
 import reeds_shepp
 import cv2 as cv
+from scipy.interpolate import splev
 from scipy.ndimage import distance_transform_edt
 from skimage.morphology import medial_axis
 from typing import List
@@ -57,7 +58,7 @@ class C:
     MAX_WHEEL_ANGLE = 0.5  # rad
     CAR_WIDTH = 1.95
     CAR_LENGTH = 4.85
-    MAX_SPEED = 5.0
+    MAX_SPEED = 5.5
     MAX_RADIUS = WHEELBASE/np.tan(MAX_WHEEL_ANGLE) # tg(delta) = L/R 
     MAX_CURVATURE = 1/MAX_RADIUS
     # parametry dla A*
@@ -65,7 +66,7 @@ class C:
     # c_val = 1.0
     FORWARD_COST = c_val*1.4
     BACKWARD_COST = c_val*1.2
-    GEAR_CHANGE_COST = c_val*3.5
+    GEAR_CHANGE_COST = c_val*3.8
     STEER_CHANGE_COST = c_val*1.7
     STEER_ANGLE_COST = c_val*2.0
     # parametry dla próbkowania
@@ -455,8 +456,7 @@ class OccupancyGrid:
 
         #self.controller.sensorConeDraw.emit(sensor_name,sensor_global_x, sensor_global_y, sensor_global_theta, dist, beta)
 
-    # jaka jest najlepsza reprezentacja tej siatki? aby samochód zaczynał po środku mapy, to trzeba uwzględnić ujemne indeksy
-    # ale jak liczyć indeksy, jeżeli poza pojazdu jest ciągła? 
+    
     def interpret_readings(self,names_dists:dict,car_pose:tuple):
         name = "distance sensor left front side"
         dist = names_dists[name]
@@ -855,7 +855,7 @@ class Path:
         
         return e_long
 
-    def speed_control(self,target_v,v_meas,dist_to_end,e_long,delta,dt,a_max = 5.0,a_dec = 5.0,a_lat_max = 2.5,kp_long = 5.8, e_long_thresh = 0.01):
+    def speed_control(self,target_v,v_meas,dist_to_end,e_long,delta,dt,a_max = 5.0,a_dec = 5.0,a_lat_max = 4.5,kp_long = 1.0, e_long_thresh = 0.1):
         
         v_stop = np.sqrt(2 * a_dec * max(dist_to_end,0.0))
         v_ref = min(abs(target_v), v_stop)
@@ -956,19 +956,6 @@ class Path:
         #     return 0.0,ind_nearest
         
         return -delta, self.ind_la # , self.change_segment
-    
-
-def savitzky_golay_filt(x, window=11, poly=3):
-    try:
-
-        # window musi być nieparzyste i <= len(x)
-        window = min(window, len(x) if len(x)%2==1 else len(x)-1)
-        window = max(window, poly+2 if (poly+2)%2==1 else poly+3)
-        if window >= len(x):
-            return x
-        return savgol_filter(x, window_length=window, polyorder=poly, mode='interp')
-    except Exception:
-        return x
 
 def resample_and_smooth_path(path:Path, ds=C.INTERP_STEP_SIZE):
     
@@ -1003,9 +990,6 @@ def resample_and_smooth_path(path:Path, ds=C.INTERP_STEP_SIZE):
         # interpolacja liniowa x(s), y(s) 
         x_dense = np.interp(s_dense, s_local, x_seg)
         y_dense = np.interp(s_dense, s_local, y_seg)
-
-        #x_dense = savitzky_golay_filt(x_dense, window=21, poly=7)
-        #y_dense = savitzky_golay_filt(y_dense, window=21, poly=7)
         #
         # kierunek stały w segmencie
         dir_val = int(np.sign(d_seg[0])) if np.sign(d_seg[0]) != 0 else 1
@@ -1014,7 +998,6 @@ def resample_and_smooth_path(path:Path, ds=C.INTERP_STEP_SIZE):
         seglen_dense = np.full_like(x_dense, dir_val * s_end, dtype=float)
 
         kappa_dense = np.interp(s_dense, s_local, path.curvs[i0:i1+1])
-        #wkappa_dense = savitzky_golay_filt(kappa_dense, window=21, poly=3)
 
         if seg_i > 0:
             # usuń pierwszy punkt żeby nie dublować granicy
@@ -1053,7 +1036,6 @@ def resample_and_smooth_path(path:Path, ds=C.INTERP_STEP_SIZE):
         costs=path.costs
     )
     return new_path
-
 
 class Node:
     def __init__(self, cell: tuple, state: tuple, delta, direction: str, g_cost, h_cost, parent=None):
@@ -1386,7 +1368,7 @@ class NewPlanner(QtCore.QObject):
 
         self.hmap = self.calculate_unconstrained_heuristic(start_pose,goal_pose,grid)
         #self.hmapData.emit(self.hmap)
-        init_dir = "forward" 
+        init_dir = "reverse" 
 
         start_node = Node(
             cell = self.discretize_state(start_pose,init_dir),

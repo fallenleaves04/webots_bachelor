@@ -58,21 +58,21 @@ def build_pose_matrix(position:np.ndarray, yaw_deg):
 Funkcja pixel_to_world robi to, co wskazuje jej nazwa -
 przelicza piksel na obrazie kamery do współrzędnych globalnych
 na podstawie parametrów wewnętrznych i zewnętrznych kamery.
-Parametry zewnętrzne są określone macierzą T_center_to_camera -
-położenie kamery w układzie samochodu.
+Parametry zewnętrzne są określone macierzą Tk_s -
+położenie kamery w układzie samochodu; przekształca punkt w układzie kamery na punkt w układzie samochodu.
 """
-def pixel_to_world(u, v, K:np.ndarray, T_center_to_camera:np.ndarray):
+def pixel_to_world(u, v, K:np.ndarray, Tk_s:np.ndarray):
     pixel = np.array([u, v, 1.0])  # Piksel w przestrzeni obrazu (homogeniczny)
     ray_camera = np.linalg.inv(K) @ pixel
     ray_camera = ray_camera / np.linalg.norm(ray_camera)  # Normalizowanie
 
-    ray_world = T_center_to_camera[:3, :3] @ ray_camera
-    camera_position = T_center_to_camera[:3, 3]
+    ray_world = Tk_s[:3, :3] @ ray_camera # a vector from the origin of camera frame transformed to the car frame
+    camera_position = Tk_s[:3, 3] # przesunięcie kamery względem układu samochodu
 
     if ray_world[2] == 0:
         return None  # Promień równoległy do ziemi, brak przecięcia
 
-    t = -camera_position[2] / ray_world[2]
+    t = -camera_position[2] / ray_world[2] # 0 = camera_position[2] + t * ray_world[2] 
     point_on_ground = camera_position + t * ray_world
 
     return point_on_ground  # Punkt na ziemi (X, Y, 0)
@@ -82,16 +82,16 @@ Przelicza punkty z układu globalnego 3D na obraz kamery 2D.
 Posługuje się macierzą kamery oraz jej połozeniem
 w układzie globalnym (samochodu).
 """
-def project_points_world_to_image(points_world, T_world_to_camera:np.ndarray, K:np.ndarray):
+def project_points_world_to_image(points_world, Tk_s:np.ndarray, K:np.ndarray): # Tk_s - kamera w układzie samochodu
     projected_points = []
 
     # Inverse -> Camera <- World
-    T_camera_to_world = np.linalg.inv(T_world_to_camera)
+    Ts_k = np.linalg.inv(Tk_s)
 
-    for point in points_world:
-        point_h = np.append(point, 1)  # homogeneous
-        point_in_camera = T_camera_to_world @ point_h
-        Xc, Yc, Zc = point_in_camera[:3]
+    for point_s in points_world:
+        point_h = np.append(point_s, 1)  # homogeneous
+        point_c = Ts_k @ point_h # P_k = Ts_k @ P_s
+        Xc, Yc, Zc = point_c[:3]
 
         if Zc <= 0:
             continue  # behind camera

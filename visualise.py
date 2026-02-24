@@ -1481,9 +1481,11 @@ class MainWindow(QtWidgets.QWidget):
         return header
 
     def send_perpendicular(self):
+        self.btn_perpendicular.setChecked(True)
         self.controller.find_type = "perpendicular"
 
     def send_parallel(self):
+        self.btn_parallel.setChecked(True)
         self.controller.find_type = "parallel"
 
     def send_left_side(self):
@@ -1498,27 +1500,6 @@ class MainWindow(QtWidgets.QWidget):
         if self.controller.parking and self.controller.state == "waiting_for_confirm_start" and self.controller.stopped:
             self.controller.timer = 0.0
             self.controller.state = "planning"
-
-    # def set_buttons_state(self):
-        
-    #     if self.state in ["planning","executing",
-    #                       "waiting_for_confirm_start", "parking_finished"
-    #                       "drive_forward","drive_backward"]:
-    #         for btn in self.btns:
-    #             btn.setEnabled(False)
-    #     else:
-    #         if self.controller.side == "left":
-    #             self.btn_left.setEnabled(False)
-    #             self.btn_right.setEnabled(True)
-    #         elif self.controller.side == "right":
-    #             self.btn_right.setEnabled(False)
-    #             self.btn_left.setEnabled(True)
-    #         if self.controller.find_type == "parallel":
-    #             self.btn_parallel.setEnabled(False)
-    #             self.btn_perpendicular.setEnabled(True)
-    #         elif self.controller.find_type == "perpendicular":
-    #             self.btn_parallel.setEnabled(True)
-    #             self.btn_perpendicular.setEnabled(False)
 
     def on_activate_clicked(self):
         self.controller.toggle_parking()
@@ -1564,7 +1545,8 @@ class MainWindow(QtWidgets.QWidget):
         locked = state in [
             "planning", "executing",
             "drive_forward", "drive_backward",
-            "parking_finished"
+            "parking_finished","stop_for_change",
+            "stop_at_end"
         ]
         self.btns
         for b in self.btns:

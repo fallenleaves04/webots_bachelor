@@ -966,7 +966,7 @@ class MainWorker(vis.QtCore.QObject):
         
         # dla miejsc
         old_type = None
-        
+        old_side = None
         # dla ścieżki
         init_maneuver = True
         delta_prev = 0.0
@@ -1094,13 +1094,7 @@ class MainWorker(vis.QtCore.QObject):
                             max_obs_radius, margin=0.1, out_path="kdtree_query.png"):
             import matplotlib.pyplot as plt
             from matplotlib.patches import Rectangle, Circle
-            """
-            obstacles: lista słowników z polami:
-                - center: (cx, cy)
-                - length, width
-                - yaw (opcjonalnie) -> jeśli brak, rysujemy AABB
-            car_pose: (x, y, yaw) - najlepiej środek auta albo rear-axle (spójnie z Twoim plannerem)
-            """
+            
             x, y, yaw = car_pose
 
             # promień auta jako półprzekątna (bezpieczny)
@@ -1207,9 +1201,11 @@ class MainWorker(vis.QtCore.QObject):
                         find_type = self.controller.find_type
                         side = self.controller.side
                         type_changed = old_type != find_type
-                        if type_changed:
+                        side_changed = old_side != side
+                        if type_changed or side_changed:
                             self.set_state(f"searching_{side}_{find_type}")
                             old_type = find_type
+                            old_side = side
                         
                         if self.controller.side == "right":
                             names_yolo = ["camera_front_right","camera_right_mirror"]
@@ -1228,7 +1224,7 @@ class MainWorker(vis.QtCore.QObject):
                                         else left_mirror_T if name == "camera_left_mirror" \
                                         else front_right_T if name == "camera_front_right" else None
 
-                                    pt = sy.pixel_to_world(x,y,cam_matrices[name],T_center_to_camera=T_center_to_camera) # punkty w układzie samochodu
+                                    pt = sy.pixel_to_world(x,y,cam_matrices[name],Tk_s=T_center_to_camera) # punkty w układzie samochodu
                                     if abs(pt[0]) < C.CAR_LENGTH - 0.9 and abs(pt[1]) < C.CAR_WIDTH/2 + 0.2:
                                         continue
                                     if pt is not None:
@@ -1252,8 +1248,6 @@ class MainWorker(vis.QtCore.QObject):
                         spots = []
                         if len(ox) > 0:
                             cls = ogm.analyze_clusters((x_odo,y_odo,yaw_odo)) 
-                            #if len(cls_old) < len(cls):
-                            #cls_old = cls
                             ogm.setup_obstacles(cls)
                             #plot_kdtree_query_debug(ogm.obstacles,ogm.kd_tree,(x_odo,y_odo,yaw_odo),C.CAR_LENGTH,C.CAR_WIDTH,ogm.collision_radius + ogm.max_obs_radius)
                             ogm.match_semantics_with_sat()
@@ -1262,7 +1256,7 @@ class MainWorker(vis.QtCore.QObject):
                             ogm.spots = spots
                         else:
                             ox,oy,cls,spots = [],[],[],[]
-                    #ox,oy,cls,spots = ogm.ox,ogm.oy,ogm.obstacles,ogm.spots
+                    
                     
 
                     
@@ -1273,17 +1267,17 @@ class MainWorker(vis.QtCore.QObject):
 
                     p1 = (x_odo,y_odo,yaw_odo)
                     p2,_ = ogm.choose_spot(p1)
-                    
-                    if 'searching' in self.controller.state and p2 is not None:
-                        self.controller.found_spot = True
-                        target_spot = p2
-                        self.set_state("found_spot")
-                        print("[MainWorker] Znaleziono miejsce! Proszę się zatrzymać.")
-                    elif self.controller.state not in ["executing","stop_for_change","stop_at_end","drive_forward","drive_backward","parking_finished"] and self.controller.found_spot and p2 is None:
-                        self.set_state("return_searching")
-                        self.controller.found_spot = False
-                        target_spot = None
-                        print("[MainWorker] Miejsce porzucone. Poszukiwanie dalsze...")
+                    if 'searching' in self.controller.state:
+                        if p2 is not None:
+                            self.controller.found_spot = True
+                            target_spot = p2
+                            self.set_state("found_spot")
+                            print("[MainWorker] Znaleziono miejsce! Proszę się zatrzymać.")
+                        elif self.controller.found_spot and p2 is None:
+                            self.set_state("return_searching")
+                            self.controller.found_spot = False
+                            target_spot = None
+                            print("[MainWorker] Miejsce porzucone. Poszukiwanie dalsze...")
                     if self.controller.state in ["return_searching"] and p2 is not None:
                         tc = target_spot['center'] or (0,0)
                         pc = p2['center']
@@ -1397,8 +1391,7 @@ class MainWorker(vis.QtCore.QObject):
                         set_steering_angle(delta_cmd, driver)   
 
                         self.delta_tracked = delta_pp
-
-                        # --- speed: NIE DOTYKAMY ---
+                        # regulacja prędkości
                         dist_to_end = max(0.0, s_end - s_now)
                         v_cmd = dir_seg * C.MAX_SPEED
                         if abs(er) > 0.02:
@@ -1575,6 +1568,9 @@ class MainWorker(vis.QtCore.QObject):
                                     [front_sensor_names,rear_sensor_names,right_side_sensor_names,left_side_sensor_names],
                                     [front_sen_apertures,rear_sen_apertures,right_side_sen_apertures,left_side_sen_apertures],
                                     max_min_dict)
+                self.controller.found_spot = False
+                self.controller.found_another_spot = False
+                p2 = None
                 old_type = None
                 write_logs = True
 
@@ -1645,27 +1641,6 @@ if __name__ == "__main__":
     sys.exit(app.exec())
 
 
-#results = model(names_images[name],half=True,device = 0,conf=0.6)
-
-#annotated_frame = results[0].plot()
-
-#cv2.namedWindow("yolo", cv2.WINDOW_NORMAL)
-#cv2.imshow("yolo", annotated_frame)
-#cv2.waitKey(1)
-
-# Wyniki:
-# out["panoptic_seg"] -> (panoptic_map[H,W] (int32), segments_info[list])
-# out["sem_seg"]      -> [C,H,W] (logity)
-# out["instances"]    -> obiekty (jeśli włączone)
-
-# img = names_images[name]  # HxWx3 (RGB)
-# out = predictor_panoptic(img)
-# panoptic, segments_info = out["panoptic_seg"]
-# panoptic = panoptic.to("cpu").numpy()
-# cv2.namedWindow("panoptic", cv2.WINDOW_NORMAL)
-# cv2.imshow("panoptic", panoptic)
-
-# Define the codec and create VideoWriter object
 
 """
 if first_call:
@@ -2011,13 +1986,12 @@ yaw = imu.getRollPitchYaw()[2] - yaw_init
 #         chessboard_yaw = 0  # degrees
 #         #rvec,tvec = cc.solve_camera_pose(image,pattern_size,cam_matrices[name],name)
 #         #if R is not None and tvec is not None:
-#         T_chessboard_to_center = sy.build_pose_matrix(chessboard_position, chessboard_yaw)
+#         Ts_c = sy.build_pose_matrix(chessboard_position, chessboard_yaw) # szachownica w układzie samochodu
 
 #         R, _ = cv2.Rodrigues(rvec)
-#         T_camera_to_chessboard = np.linalg.inv(sy.build_homogeneous_transform(R, tvec))
-
-#         # Combine to get rear axle → camera
-#         T_center_to_camera = T_chessboard_to_center @ T_camera_to_chessboard
+#         Tk_c = np.linalg.inv(sy.build_homogeneous_transform(R, tvec)) # szachownica w układzie kamery; R, tvec składają się na transformację punktu w układzie szachownicy P_c na punkt w układzie kamery P_k; P_k = Tc_k @ P_c
+#
+#         Ts_k = Tc_s @ Tk_c
         
 #         # Project bbox
 #         bbox_world = np.array([
@@ -2030,7 +2004,7 @@ yaw = imu.getRollPitchYaw()[2] - yaw_init
 #             [-0.6-block_size, 2.8-block_size, 1.0],  # bottom rear left
 #             [-0.6-block_size, 2.8+block_size, 1.0],   # bottom rear right
 #         ])
-#         image_points = sy.project_points_world_to_image(bbox_world, T_center_to_camera, cam_matrices[name])
+#         image_points = sy.project_points_world_to_image(bbox_world, Ts_k, cam_matrices[name])
 #         # Draw bottom rectangle
 #         for i in range(4):
 #             pt1 = image_points[i]
